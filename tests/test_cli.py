@@ -129,6 +129,33 @@ def test_from_job_not_ready_exits_nonzero(monkeypatch, capsys, sample_png: Path)
     assert "not ready" in capsys.readouterr().err
 
 
+def test_from_job_on_corrupt_png_exits_cleanly_not_a_raw_traceback(monkeypatch, capsys, tmp_path: Path):
+    import asset_provenance_toolkit.cli as cli_module
+
+    fake_png = tmp_path / "corrupt.png"
+    fake_png.write_bytes(b"not really a png")
+
+    monkeypatch.setattr(
+        cli_module,
+        "fetch_job_record",
+        lambda gateway_url, job_id, **kwargs: {
+            "id": job_id,
+            "status": "ready",
+            "capability": "c",
+            "provider": "p",
+            "params": {},
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        _run(
+            monkeypatch,
+            ["from-job", str(fake_png), "--gateway-url", "http://gw.test", "--job-id", "job-1"],
+        )
+    assert exc_info.value.code == 1
+    assert "not a readable PNG" in capsys.readouterr().err
+
+
 def test_from_job_fetch_error_exits_nonzero(monkeypatch, capsys, sample_png: Path):
     import asset_provenance_toolkit.cli as cli_module
     from asset_provenance_toolkit.gateway_client import JobFetchError

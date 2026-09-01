@@ -25,6 +25,24 @@ def test_fetch_job_record_raises_on_404():
         fetch_job_record("http://gw.test", "job-1", http_client=client)
 
 
+def test_fetch_job_record_raises_clean_error_on_non_json_response():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"<html>not json</html>", headers={"content-type": "text/html"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(JobFetchError, match="non-JSON"):
+        fetch_job_record("http://gw.test", "job-1", http_client=client)
+
+
+def test_fetch_job_record_raises_clean_error_on_non_object_json_response():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=["not", "an", "object"])
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(JobFetchError, match="expected an object"):
+        fetch_job_record("http://gw.test", "job-1", http_client=client)
+
+
 def test_fetch_job_record_strips_trailing_slash_from_base_url():
     seen_paths = []
 

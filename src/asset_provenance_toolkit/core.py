@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Optional
 
 from . import png_backend, sidecar_backend
-from .schema import Provenance
+from .png_backend import UnreadablePngError
+from .schema import Provenance, ProvenanceError
 
 #: Extensions with a native embedding backend. Extend this (and add a new
 #: `*_backend.py` module) as more native formats get support - JPEG/EXIF
@@ -22,6 +23,19 @@ def _has_native_backend(path: str | Path) -> bool:
     return Path(path).suffix.lower() in NATIVE_BACKEND_EXTENSIONS
 
 
+def _read_png(fn, path):
+    """Run a png_backend function, turning png_backend's read-phase-only
+    UnreadablePngError (wrong file renamed to .png, truncated/corrupt
+    download, ...) into a ProvenanceError - every CLI command already
+    knows how to report a ProvenanceError cleanly. A write-phase failure
+    (permission denied, disk full, ...) is a different problem and is
+    deliberately left as its native exception type, not caught here."""
+    try:
+        return fn(path)
+    except UnreadablePngError as exc:
+        raise ProvenanceError(str(exc)) from exc
+
+
 def embed(path: str | Path, provenance: Provenance) -> str:
     """Embed `provenance` into the asset at `path`. Returns which backend
     was used ("png" or "sidecar"), since callers/CLI output often want to
@@ -29,7 +43,7 @@ def embed(path: str | Path, provenance: Provenance) -> str:
     if not Path(path).exists():
         raise FileNotFoundError(f"no such file: {path}")
     if _has_native_backend(path):
-        png_backend.embed_png(path, provenance)
+        _read_png(lambda p: png_backend.embed_png(p, provenance), path)
         return "png"
     sidecar_backend.embed_sidecar(path, provenance)
     return "sidecar"
@@ -44,7 +58,7 @@ def extract(path: str | Path) -> Optional[Provenance]:
     if not Path(path).exists():
         raise FileNotFoundError(f"no such file: {path}")
     if _has_native_backend(path):
-        found = png_backend.extract_png(path)
+        found = _read_png(png_backend.extract_png, path)
         if found is not None:
             return found
     return sidecar_backend.extract_sidecar(path)
@@ -57,6 +71,6 @@ def strip(path: str | Path) -> bool:
         raise FileNotFoundError(f"no such file: {path}")
     removed = False
     if _has_native_backend(path):
-        removed = png_backend.strip_png(path) or removed
+        removed = _read_png(png_backend.strip_png, path) or removed
     removed = sidecar_backend.strip_sidecar(path) or removed
     return removed

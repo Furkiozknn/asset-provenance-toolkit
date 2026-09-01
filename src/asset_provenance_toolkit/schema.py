@@ -59,6 +59,8 @@ class Provenance:
         version = data.get("schema_version")
         if version is None:
             raise ProvenanceError("provenance data is missing 'schema_version'")
+        if not isinstance(version, int) or isinstance(version, bool):
+            raise ProvenanceError(f"provenance data has a non-integer 'schema_version': {version!r}")
         if version > SCHEMA_VERSION:
             raise ProvenanceError(
                 f"provenance data is schema_version={version}, newer than this tool understands "

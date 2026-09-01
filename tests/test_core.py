@@ -73,6 +73,29 @@ def test_operations_on_missing_file_raise_file_not_found_error(tmp_path: Path):
         strip(missing)
 
 
+def test_embed_on_file_with_png_extension_but_not_actually_a_png_raises_provenance_error(tmp_path: Path):
+    # A wrong file renamed to .png, or a truncated/corrupt download - PIL's
+    # UnidentifiedImageError/OSError must become a clean ProvenanceError,
+    # not escape uncaught as a raw PIL exception.
+    from asset_provenance_toolkit.schema import ProvenanceError
+
+    fake_png = tmp_path / "not-really.png"
+    fake_png.write_bytes(b"this is definitely not PNG data")
+
+    with pytest.raises(ProvenanceError, match="not a readable PNG"):
+        embed(fake_png, Provenance(capability="c", provider="p", params={}))
+
+
+def test_extract_on_corrupt_png_raises_provenance_error(tmp_path: Path):
+    from asset_provenance_toolkit.schema import ProvenanceError
+
+    fake_png = tmp_path / "corrupt.png"
+    fake_png.write_bytes(b"\x89PNG\r\n\x1a\ntruncated garbage after the signature")
+
+    with pytest.raises(ProvenanceError, match="not a readable PNG"):
+        extract(fake_png)
+
+
 def test_extension_matching_is_case_insensitive(tmp_path: Path):
     from PIL import Image
 

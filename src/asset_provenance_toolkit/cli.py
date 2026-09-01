@@ -31,7 +31,7 @@ def _cmd_embed(args: argparse.Namespace) -> None:
     )
     try:
         backend = embed(args.file, provenance)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ProvenanceError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)
     print(f"embedded provenance into {args.file} ({backend} backend)")
@@ -68,7 +68,7 @@ def _cmd_verify(args: argparse.Namespace) -> None:
 def _cmd_strip(args: argparse.Namespace) -> None:
     try:
         removed = strip(args.file)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ProvenanceError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)
     if removed:
@@ -106,7 +106,7 @@ def _cmd_from_job(args: argparse.Namespace) -> None:
     )
     try:
         backend = embed(args.file, provenance)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ProvenanceError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)
     print(f"embedded provenance from job {args.job_id} into {args.file} ({backend} backend)")

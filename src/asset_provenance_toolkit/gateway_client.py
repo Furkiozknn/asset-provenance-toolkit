@@ -8,6 +8,7 @@ documented HTTP contract.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Optional
 
 import httpx
@@ -28,7 +29,17 @@ def fetch_job_record(
             raise JobFetchError(
                 f"could not fetch job {job_id!r} from {gateway_url}: HTTP {response.status_code} - {response.text}"
             )
-        return response.json()
+        try:
+            record = response.json()
+        except json.JSONDecodeError as exc:
+            raise JobFetchError(
+                f"gateway at {gateway_url} returned a non-JSON response for job {job_id!r}: {exc}"
+            ) from exc
+        if not isinstance(record, dict):
+            raise JobFetchError(
+                f"gateway at {gateway_url} returned a JSON {type(record).__name__} for job {job_id!r}, expected an object"
+            )
+        return record
     finally:
         if owns_client:
             client.close()

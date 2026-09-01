@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PIL import Image, PngImagePlugin
+from PIL import Image, PngImagePlugin, UnidentifiedImageError
 
 from .schema import Provenance
 
@@ -20,10 +20,34 @@ from .schema import Provenance
 PROVENANCE_KEY = "ai-provenance"
 
 
-def _read_existing_text(path: str | Path) -> dict[str, str]:
-    with Image.open(path) as img:
-        img.load()
-        return dict(getattr(img, "text", {}) or {})
+class UnreadablePngError(Exception):
+    """Raised only for a read-phase failure (PIL can't identify/decode the
+    file as a PNG at all) - deliberately never raised for a write-phase
+    failure (permission denied, disk full, ...), which is a different
+    problem with a different fix and must not be mislabeled as this one."""
+
+
+def _open_and_read(path: str | Path, *, copy_pixels: bool):
+    """Open `path`, fully load its pixel data, and return (pixel_image or
+    None, text_dict). `copy_pixels` is False for the read-only extract path,
+    which never saves anything back and shouldn't pay for copying pixel data
+    it will just discard.
+
+    The only place read-phase errors are caught and reclassified - a
+    write-phase OSError (e.g. saving back to a read-only file) happens
+    later, outside this function, and is deliberately left as its native
+    exception type rather than being caught here too."""
+    try:
+        with Image.open(path) as img:
+            img.load()
+            pixel_image = img.copy() if copy_pixels else None
+            return pixel_image, dict(getattr(img, "text", {}) or {})
+    except FileNotFoundError:
+        raise  # a TOCTOU race (deleted between the caller's exists() check and
+        # this open) is a missing-file problem, not an unreadable-PNG one -
+        # let it propagate as the FileNotFoundError every caller already handles.
+    except (UnidentifiedImageError, OSError) as exc:
+        raise UnreadablePngError(f"{path}: not a readable PNG file ({exc})") from exc
 
 
 def embed_png(path: str | Path, provenance: Provenance) -> None:
@@ -33,10 +57,7 @@ def embed_png(path: str | Path, provenance: Provenance) -> None:
     chunks already present (e.g. from a different tool) are preserved,
     except a stale copy of this tool's own key, which is replaced.
     """
-    with Image.open(path) as img:
-        img.load()
-        existing = dict(getattr(img, "text", {}) or {})
-        pixel_image = img.copy()
+    pixel_image, existing = _open_and_read(path, copy_pixels=True)
 
     info = PngImagePlugin.PngInfo()
     for key, value in existing.items():
@@ -48,7 +69,8 @@ def embed_png(path: str | Path, provenance: Provenance) -> None:
 
 
 def extract_png(path: str | Path) -> Optional[Provenance]:
-    raw = _read_existing_text(path).get(PROVENANCE_KEY)
+    _pixel_image, existing = _open_and_read(path, copy_pixels=False)
+    raw = existing.get(PROVENANCE_KEY)
     if raw is None:
         return None
     return Provenance.from_json(raw)
@@ -57,12 +79,9 @@ def extract_png(path: str | Path) -> Optional[Provenance]:
 def strip_png(path: str | Path) -> bool:
     """Remove this tool's provenance chunk, preserving every other chunk.
     Returns False (no-op) if there was nothing to remove."""
-    with Image.open(path) as img:
-        img.load()
-        existing = dict(getattr(img, "text", {}) or {})
-        if PROVENANCE_KEY not in existing:
-            return False
-        pixel_image = img.copy()
+    pixel_image, existing = _open_and_read(path, copy_pixels=True)
+    if PROVENANCE_KEY not in existing:
+        return False
 
     info = PngImagePlugin.PngInfo()
     for key, value in existing.items():

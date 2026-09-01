@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from PIL import Image, PngImagePlugin
 
-from asset_provenance_toolkit.png_backend import embed_png, extract_png, strip_png
+from asset_provenance_toolkit.png_backend import UnreadablePngError, embed_png, extract_png, strip_png
 from asset_provenance_toolkit.schema import Provenance
 
 
@@ -64,6 +65,27 @@ def test_strip_removes_provenance_and_reports_true(sample_png: Path):
 def test_strip_on_file_with_no_provenance_is_a_noop_reporting_false(sample_png: Path):
     removed = strip_png(sample_png)
     assert removed is False
+
+
+def test_embed_on_unreadable_file_raises_unreadable_png_error(tmp_path: Path):
+    fake_png = tmp_path / "not-really.png"
+    fake_png.write_bytes(b"definitely not PNG data")
+    with pytest.raises(UnreadablePngError, match="not a readable PNG"):
+        embed_png(fake_png, Provenance(capability="c", provider="p", params={}))
+
+
+def test_write_phase_failure_is_not_mislabeled_as_unreadable_png(sample_png: Path, monkeypatch):
+    # A permission-denied/disk-full failure happens at save() time, on a
+    # perfectly valid, fully-readable PNG - it must propagate as its own
+    # exception type, not get caught and reported as "not a readable PNG",
+    # which would send a user down the wrong troubleshooting path entirely.
+    def failing_save(self, *args, **kwargs):
+        raise PermissionError("permission denied (simulated)")
+
+    monkeypatch.setattr(Image.Image, "save", failing_save)
+
+    with pytest.raises(PermissionError):
+        embed_png(sample_png, Provenance(capability="c", provider="p", params={}))
 
 
 def test_strip_preserves_other_text_chunks(sample_png: Path):

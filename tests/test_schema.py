@@ -30,6 +30,21 @@ def test_extra_field_roundtrips():
     assert restored.extra == {"note": "custom field"}
 
 
+def test_non_numeric_schema_version_raises_provenance_error_not_typeerror():
+    # A hand-edited or foreign-tool-written record with a string
+    # schema_version must fail cleanly (ProvenanceError), not with a raw
+    # TypeError from the ">" comparison escaping uncaught.
+    data = json.dumps({"schema_version": "2", "capability": "c", "provider": "p", "params": {}})
+    with pytest.raises(ProvenanceError, match="non-integer"):
+        Provenance.from_json(data)
+
+
+def test_boolean_schema_version_is_rejected_despite_bool_being_an_int_subclass():
+    data = json.dumps({"schema_version": True, "capability": "c", "provider": "p", "params": {}})
+    with pytest.raises(ProvenanceError, match="non-integer"):
+        Provenance.from_json(data)
+
+
 def test_from_json_rejects_invalid_json():
     with pytest.raises(ProvenanceError, match="not valid JSON"):
         Provenance.from_json("{not valid json")
