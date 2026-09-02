@@ -15,9 +15,17 @@ from PIL import Image, PngImagePlugin, UnidentifiedImageError
 
 from .schema import Provenance
 
-#: PNG tEXt keyword this tool reads/writes. Keywords are conventionally
+#: PNG tEXt/zTXt keyword this tool reads/writes. Keywords are conventionally
 #: short and namespaced to avoid colliding with other tools' metadata.
 PROVENANCE_KEY = "ai-provenance"
+
+#: Above this many bytes of provenance JSON, write a compressed zTXt chunk
+#: instead of an uncompressed tEXt one - the same tradeoff ComfyUI makes for
+#: its embedded workflow JSON. A `result` blob (e.g. a preview or a longer
+#: params dict) can otherwise bloat the PNG well past the pixel data itself;
+#: Pillow decompresses zTXt transparently, so `img.text` and this module's
+#: own reads see no difference either way.
+_ZTXT_THRESHOLD = 2048
 
 
 class UnreadablePngError(Exception):
@@ -59,11 +67,12 @@ def embed_png(path: str | Path, provenance: Provenance) -> None:
     """
     pixel_image, existing = _open_and_read(path, copy_pixels=True)
 
+    text = provenance.to_json()
     info = PngImagePlugin.PngInfo()
     for key, value in existing.items():
         if key != PROVENANCE_KEY:
             info.add_text(key, value)
-    info.add_text(PROVENANCE_KEY, provenance.to_json())
+    info.add_text(PROVENANCE_KEY, text, zip=len(text) > _ZTXT_THRESHOLD)
 
     pixel_image.save(path, pnginfo=info)
 

@@ -11,15 +11,21 @@ from .gateway_client import JobFetchError, fetch_job_record
 from .schema import Provenance, ProvenanceError
 
 
-def _cmd_embed(args: argparse.Namespace) -> None:
+def _parse_json_object(raw: str, *, flag: str) -> dict:
     try:
-        params = json.loads(args.params) if args.params else {}
+        value = json.loads(raw) if raw else {}
     except json.JSONDecodeError as exc:
-        print(f"error: --params must be valid JSON: {exc}", file=sys.stderr)
+        print(f"error: {flag} must be valid JSON: {exc}", file=sys.stderr)
         raise SystemExit(1)
-    if not isinstance(params, dict):
-        print("error: --params must be a JSON object", file=sys.stderr)
+    if not isinstance(value, dict):
+        print(f"error: {flag} must be a JSON object", file=sys.stderr)
         raise SystemExit(1)
+    return value
+
+
+def _cmd_embed(args: argparse.Namespace) -> None:
+    params = _parse_json_object(args.params, flag="--params")
+    extra = _parse_json_object(args.extra, flag="--extra")
 
     provenance = Provenance(
         capability=args.capability,
@@ -28,6 +34,7 @@ def _cmd_embed(args: argparse.Namespace) -> None:
         job_id=args.job_id,
         source=args.source,
         source_url=args.source_url,
+        extra=extra,
     )
     try:
         backend = embed(args.file, provenance)
@@ -53,11 +60,20 @@ def _cmd_verify(args: argparse.Namespace) -> None:
     try:
         provenance = extract(args.file)
     except (FileNotFoundError, ProvenanceError) as exc:
-        print(f"FAIL: {exc}")
+        if args.json:
+            print(json.dumps({"ok": False, "file": args.file, "error": str(exc)}))
+        else:
+            print(f"FAIL: {exc}")
         raise SystemExit(1)
     if provenance is None:
-        print(f"FAIL: no provenance found for {args.file}")
+        if args.json:
+            print(json.dumps({"ok": False, "file": args.file, "error": "no provenance found"}))
+        else:
+            print(f"FAIL: no provenance found for {args.file}")
         raise SystemExit(1)
+    if args.json:
+        print(json.dumps({"ok": True, "file": args.file, "provenance": provenance.to_dict()}))
+        return
     print(
         f"OK: {args.file} has provenance "
         f"(capability={provenance.capability!r}, provider={provenance.provider!r}, "
@@ -124,6 +140,9 @@ def main() -> None:
     embed_parser.add_argument("--job-id", default=None)
     embed_parser.add_argument("--source", default="manual")
     embed_parser.add_argument("--source-url", default=None)
+    embed_parser.add_argument(
+        "--extra", default="{}", help="JSON object of additional fields, e.g. '{\"seed\": 42}'"
+    )
     embed_parser.set_defaults(func=_cmd_embed)
 
     extract_parser = subparsers.add_parser("extract", help="print a file's embedded provenance as JSON")
@@ -133,6 +152,7 @@ def main() -> None:
 
     verify_parser = subparsers.add_parser("verify", help="check whether a file has provenance (exit 0/1)")
     verify_parser.add_argument("file")
+    verify_parser.add_argument("--json", action="store_true", help="machine-readable JSON instead of text")
     verify_parser.set_defaults(func=_cmd_verify)
 
     strip_parser = subparsers.add_parser("strip", help="remove provenance from a file")
