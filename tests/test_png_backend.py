@@ -79,10 +79,14 @@ def test_write_phase_failure_is_not_mislabeled_as_unreadable_png(sample_png: Pat
     # perfectly valid, fully-readable PNG - it must propagate as its own
     # exception type, not get caught and reported as "not a readable PNG",
     # which would send a user down the wrong troubleshooting path entirely.
-    def failing_save(self, *args, **kwargs):
+    import os
+
+    def failing_replace(src, dst, *args, **kwargs):
         raise PermissionError("permission denied (simulated)")
 
-    monkeypatch.setattr(Image.Image, "save", failing_save)
+    # The backend writes a sibling temp file and renames it into place; the
+    # rename is where a permissions failure on the target directory lands.
+    monkeypatch.setattr(os, "replace", failing_replace)
 
     with pytest.raises(PermissionError):
         embed_png(sample_png, Provenance(capability="c", provider="p", params={}))
@@ -139,3 +143,66 @@ def test_strip_preserves_other_text_chunks(sample_png: Path):
     with Image.open(sample_png) as img:
         img.load()
         assert img.text.get("some-other-tool") == "keep me"
+
+
+def test_embed_leaves_every_other_chunk_byte_for_byte(sample_png: Path):
+    """Not merely 'same pixels': the original encoder's IDAT bytes survive, so
+    a checksum of the pixel stream taken before embedding still matches."""
+    import struct
+
+    def chunks(raw: bytes):
+        out, off = [], 8
+        while off < len(raw):
+            (length,) = struct.unpack(">I", raw[off : off + 4])
+            ctype = raw[off + 4 : off + 8]
+            out.append((ctype, raw[off + 8 : off + 8 + length]))
+            off += 12 + length
+        return out
+
+    before = chunks(sample_png.read_bytes())
+    embed_png(sample_png, Provenance(capability="c", provider="p", params={}))
+    after = chunks(sample_png.read_bytes())
+    assert [c for c in after if c[0] != b"tEXt"] == before
+    assert [c[0] for c in after].index(b"tEXt") == len(after) - 2  # right before IEND
+
+
+def test_a_truncated_png_is_unreadable_not_a_crash(sample_png: Path):
+    raw = sample_png.read_bytes()
+    sample_png.write_bytes(raw[: len(raw) // 2])
+    with pytest.raises(UnreadablePngError, match="not a readable PNG"):
+        extract_png(sample_png)
+
+
+def test_a_corrupt_provenance_chunk_crc_is_refused(sample_png: Path):
+    embed_png(sample_png, Provenance(capability="c", provider="p", params={}))
+    raw = bytearray(sample_png.read_bytes())
+    i = raw.index(b"tEXt")
+    raw[i + 8] ^= 0xFF  # flip a byte of the keyword; the stored CRC no longer matches
+    sample_png.write_bytes(bytes(raw))
+    with pytest.raises(UnreadablePngError, match="bad CRC"):
+        extract_png(sample_png)
+
+
+def test_non_latin1_provenance_written_by_another_tool_is_read_from_itxt(sample_png: Path):
+    """Pillow writes iTXt for text it cannot encode as latin-1; a reader that
+    only understood tEXt would silently return None for such files."""
+    provenance = Provenance(capability="c", provider="p", params={"prompt": "kırmızı ayakkabı"})
+    with Image.open(sample_png) as img:
+        img.load()
+        info = PngImagePlugin.PngInfo()
+        info.add_itxt("ai-provenance", provenance.to_json(), zip=False)
+        pixel = img.copy()
+    pixel.save(sample_png, pnginfo=info)
+    assert extract_png(sample_png) == provenance
+
+
+def test_embed_does_not_leave_a_temp_file_on_failure(sample_png: Path, monkeypatch):
+    import os
+
+    def failing_replace(src, dst, *args, **kwargs):
+        raise OSError("disk full (simulated)")
+
+    monkeypatch.setattr(os, "replace", failing_replace)
+    with pytest.raises(OSError):
+        embed_png(sample_png, Provenance(capability="c", provider="p", params={}))
+    assert [p.name for p in sample_png.parent.iterdir()] == [sample_png.name]
