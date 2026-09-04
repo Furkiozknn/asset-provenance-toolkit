@@ -68,6 +68,66 @@ def test_verify_fail(monkeypatch, capsys, sample_png: Path):
     assert "FAIL:" in capsys.readouterr().out
 
 
+def test_verify_json_ok(monkeypatch, capsys, sample_png: Path):
+    _run(monkeypatch, ["embed", str(sample_png), "--capability", "c", "--provider", "p"])
+    capsys.readouterr()
+    _run(monkeypatch, ["verify", str(sample_png), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["provenance"]["capability"] == "c"
+
+
+def test_verify_json_fail(monkeypatch, capsys, sample_png: Path):
+    with pytest.raises(SystemExit) as exc_info:
+        _run(monkeypatch, ["verify", str(sample_png), "--json"])
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+
+
+def test_embed_on_jpeg_uses_jpeg_backend(monkeypatch, capsys, sample_jpg: Path):
+    _run(
+        monkeypatch,
+        ["embed", str(sample_jpg), "--capability", "c", "--provider", "p"],
+    )
+    out = capsys.readouterr().out
+    assert "(jpeg backend)" in out
+
+    _run(monkeypatch, ["extract", str(sample_jpg), "--compact"])
+    extracted = json.loads(capsys.readouterr().out)
+    assert extracted["capability"] == "c"
+
+
+def test_embed_with_extra_fields_roundtrips(monkeypatch, capsys, sample_png: Path):
+    _run(
+        monkeypatch,
+        [
+            "embed",
+            str(sample_png),
+            "--capability",
+            "c",
+            "--provider",
+            "p",
+            "--extra",
+            '{"seed": 42}',
+        ],
+    )
+    capsys.readouterr()
+    _run(monkeypatch, ["extract", str(sample_png), "--compact"])
+    extracted = json.loads(capsys.readouterr().out)
+    assert extracted["extra"] == {"seed": 42}
+
+
+def test_embed_invalid_extra_json_exits_nonzero(monkeypatch, capsys, sample_png: Path):
+    with pytest.raises(SystemExit) as exc_info:
+        _run(
+            monkeypatch,
+            ["embed", str(sample_png), "--capability", "c", "--provider", "p", "--extra", "not json"],
+        )
+    assert exc_info.value.code == 1
+    assert "must be valid JSON" in capsys.readouterr().err
+
+
 def test_strip(monkeypatch, capsys, sample_png: Path):
     _run(monkeypatch, ["embed", str(sample_png), "--capability", "c", "--provider", "p"])
     capsys.readouterr()

@@ -88,6 +88,43 @@ def test_write_phase_failure_is_not_mislabeled_as_unreadable_png(sample_png: Pat
         embed_png(sample_png, Provenance(capability="c", provider="p", params={}))
 
 
+def test_large_payload_is_written_as_compressed_ztxt_and_still_roundtrips(sample_png: Path):
+    import zlib
+
+    provenance = Provenance(
+        capability="c", provider="p", params={"prompt": "x" * 5000}
+    )
+    embed_png(sample_png, provenance)
+
+    with Image.open(sample_png) as img:
+        img.load()
+        # Pillow exposes zTXt content through the same `.text` dict as tEXt
+        # (transparently decompressed), so round-tripping is unaffected...
+        assert extract_png(sample_png) == provenance
+        # ...but the chunk on disk is verifiably compressed: find the raw
+        # zTXt chunk and confirm its payload zlib-decompresses to our JSON.
+        with open(sample_png, "rb") as fh:
+            raw = fh.read()
+    chunk_start = raw.index(b"zTXt")
+    length = int.from_bytes(raw[chunk_start - 4 : chunk_start], "big")
+    chunk_data = raw[chunk_start + 4 : chunk_start + 4 + length]
+    keyword, _null, compression_method, compressed = chunk_data.split(b"\x00", 1)[0], None, None, None
+    assert keyword == b"ai-provenance"
+    # After the keyword's null terminator comes a 1-byte compression method,
+    # then the zlib-compressed text.
+    rest = chunk_data[len(keyword) + 1 :]
+    compressed_text = rest[1:]
+    assert zlib.decompress(compressed_text).decode("latin-1") == provenance.to_json()
+
+
+def test_small_payload_is_not_compressed(sample_png: Path):
+    embed_png(sample_png, Provenance(capability="c", provider="p", params={}))
+    with open(sample_png, "rb") as fh:
+        raw = fh.read()
+    assert b"zTXt" not in raw
+    assert b"tEXt" in raw
+
+
 def test_strip_preserves_other_text_chunks(sample_png: Path):
     with Image.open(sample_png) as img:
         img.load()

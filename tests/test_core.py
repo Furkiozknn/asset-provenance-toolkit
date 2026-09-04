@@ -21,6 +21,51 @@ def test_embed_on_non_png_uses_sidecar_backend(sample_non_png: Path):
     assert sidecar_path(sample_non_png).exists()
 
 
+def test_embed_on_jpeg_uses_jpeg_backend_not_sidecar(sample_jpg: Path):
+    backend = embed(sample_jpg, Provenance(capability="c", provider="p", params={}))
+    assert backend == "jpeg"
+    assert not sidecar_path(sample_jpg).exists()
+
+
+def test_extract_falls_back_to_sidecar_for_a_jpeg_whose_segment_was_stripped_elsewhere(sample_jpg: Path):
+    from asset_provenance_toolkit.sidecar_backend import embed_sidecar
+
+    provenance = Provenance(capability="c", provider="p", params={})
+    embed_sidecar(sample_jpg, provenance)
+    assert extract(sample_jpg) == provenance
+
+
+def test_strip_removes_both_jpeg_segment_and_any_sidecar(sample_jpg: Path):
+    from asset_provenance_toolkit.sidecar_backend import embed_sidecar
+
+    embed(sample_jpg, Provenance(capability="c", provider="p", params={}))
+    embed_sidecar(sample_jpg, Provenance(capability="c", provider="p", params={}))
+
+    removed = strip(sample_jpg)
+    assert removed is True
+    assert extract(sample_jpg) is None
+    assert not sidecar_path(sample_jpg).exists()
+
+
+def test_embed_on_file_with_jpeg_extension_but_not_actually_a_jpeg_raises_provenance_error(tmp_path: Path):
+    from asset_provenance_toolkit.schema import ProvenanceError
+
+    fake_jpg = tmp_path / "not-really.jpg"
+    fake_jpg.write_bytes(b"this is definitely not JPEG data")
+
+    with pytest.raises(ProvenanceError, match="not a readable JPEG"):
+        embed(fake_jpg, Provenance(capability="c", provider="p", params={}))
+
+
+def test_jpeg_extension_variant_and_case_are_both_dispatched_natively(tmp_path: Path):
+    from PIL import Image
+
+    upper_jpeg = tmp_path / "SHOUTY.JPEG"
+    Image.new("RGB", (4, 4)).save(upper_jpeg, format="JPEG")
+    backend = embed(upper_jpeg, Provenance(capability="c", provider="p", params={}))
+    assert backend == "jpeg"
+
+
 def test_extract_png_reads_embedded_chunk(sample_png: Path):
     provenance = Provenance(capability="c", provider="p", params={"x": 1})
     embed(sample_png, provenance)
