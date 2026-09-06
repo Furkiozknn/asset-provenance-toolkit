@@ -1,3 +1,5 @@
+![asset-provenance-toolkit - generation provenance embedded in the file itself](assets/banner.svg)
+
 # asset-provenance-toolkit
 
 Embed and extract generation provenance — capability, provider, params, job id — directly in the files an AI pipeline produces, so the record travels with the asset instead of living only in a database row. A provider-agnostic generalization of the classic "drag the PNG back into the UI to see its generation parameters" pattern (AUTOMATIC1111, ComfyUI), applicable to any file and any generation backend.
