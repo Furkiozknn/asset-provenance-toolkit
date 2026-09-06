@@ -38,6 +38,8 @@ uv run aprov verify cat.png
 
 ## Backends
 
+<img src="assets/backends.svg" alt="Three backends behind one call: PNG gets an ai-provenance text chunk via Pillow, switching to compressed zTXt past about 2 KB and re-saving without touching pixel data; JPEG gets a private APP1 segment tagged AIPROV1 spliced straight into the marker structure so the image is never re-encoded; everything else gets a sidecar JSON file. Extraction always falls back to the sidecar." width="100%">
+
 | File type | Backend | How |
 |---|---|---|
 | `.png` | native | An `ai-provenance` chunk via Pillow — `tEXt` normally, `zTXt` (zlib-compressed, the same tradeoff ComfyUI makes for its embedded workflow JSON) once the record passes ~2 KB. Other text chunks are preserved, and the image is re-saved without touching pixel data (`img.copy()` after `img.load()`) — genuinely lossless. |
@@ -49,6 +51,8 @@ uv run aprov verify cat.png
 An MP4/QuickTime atom backend is a natural next step, deliberately left for later — video container formats are involved enough to deserve their own pass rather than being squeezed in alongside this one.
 
 ## Relationship to C2PA / Content Credentials
+
+<img src="assets/c2pa.svg" alt="What this toolkit records - capability, provider, params, job id, schema version and timestamp, kept inside or beside the file - against what C2PA provides and this deliberately does not: a signature from an issued identity, a manifest bound to the content hash, tamper evidence and revocation. Anyone with file access can forge or strip a record here." width="100%">
 
 [C2PA](https://c2pa.org/) ("Content Credentials") is the industry standard for *cryptographically signed, tamper-evident* provenance: a manifest is bound to the asset's content hash and signed with an X.509 certificate, so a viewer can verify the credential wasn't altered and trace it to a specific signing identity, and browsers/platforms are increasingly built to surface that signature. This toolkit deliberately does **not** implement any of that. Signing requires certificate issuance and a trust model — a genuinely different, heavier product than a CLI a solo pipeline drops into its output step — and claiming C2PA compatibility without one would be actively misleading.
 
