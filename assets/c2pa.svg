@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 426" width="1200" height="426" role="img" aria-label="What this toolkit records - capability, provider, params, job id, schema version and timestamp, kept inside or beside the file - against what C2PA provides and this deliberately does not: a signature from an issued identity, a manifest bound to the content hash, tamper evidence and revocation. Anyone with file access can forge or strip a record here.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="55%" stop-color="#0f2024"/>
+      <stop offset="100%" stop-color="#0b191d"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#39d3bb"/>
+      <stop offset="50%" stop-color="#4c8dff"/>
+      <stop offset="100%" stop-color="#3fb950"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b98a9"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="426" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="4" fill="url(#accent)"/>
+  <text x="40" y="56" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24" font-weight="700" fill="#e6edf3">a note to your future self, not a proof of origin</text>
+  <text x="40" y="84" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" fill="#8b98a9">the same idea C2PA captures, in the same place, with none of the same guarantees - said plainly rather than implied</text>
+    <rect x="40" y="128" width="550" height="182" rx="14" fill="#131a26" stroke="#3fb950" stroke-width="1.6"/>
+    <text x="62" y="160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" font-weight="700" fill="#3fb950">this toolkit gives you</text>
+    <path d="M62 172 L568 172" stroke="#26324a" stroke-width="1"/>
+    <circle cx="70" cy="193" r="3.5" fill="#3fb950"/>
+    <text x="86" y="198" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">What ran: capability, provider, params, job id</text>
+    <circle cx="70" cy="223" r="3.5" fill="#3fb950"/>
+    <text x="86" y="228" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">Where it ran: schema_version and created_at</text>
+    <circle cx="70" cy="253" r="3.5" fill="#3fb950"/>
+    <text x="86" y="258" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">Inside the file, or beside it - no database lookup</text>
+    <circle cx="70" cy="283" r="3.5" fill="#3fb950"/>
+    <text x="86" y="288" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">Six weeks later, from the artifact alone</text>
+    <rect x="610" y="128" width="550" height="182" rx="14" fill="#131a26" stroke="#f0b429" stroke-width="1.6"/>
+    <text x="632" y="160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" font-weight="700" fill="#f0b429">C2PA gives you, and this does not</text>
+    <path d="M632 172 L1138 172" stroke="#26324a" stroke-width="1"/>
+    <circle cx="640" cy="193" r="3.5" fill="#f0b429"/>
+    <text x="656" y="198" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">A signature from an issued X.509 identity</text>
+    <circle cx="640" cy="223" r="3.5" fill="#f0b429"/>
+    <text x="656" y="228" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">A manifest bound to the content's own hash</text>
+    <circle cx="640" cy="253" r="3.5" fill="#f0b429"/>
+    <text x="656" y="258" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">Tamper evidence, and revocation</text>
+    <circle cx="640" cy="283" r="3.5" fill="#f0b429"/>
+    <text x="656" y="288" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">Anything a third party should be asked to trust</text>
+    <text x="40" y="350" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#8b98a9">Anyone with file access - using the exact commands this CLI ships - can edit, forge or strip a record. That is not</text>
+    <text x="40" y="374" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#5c6b7f">a gap to be closed later: signing needs certificate issuance and a trust model, which is a different product.</text>
+    <text x="40" y="398" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#5c6b7f">If you need verifiable authenticity for publication, moderation or law, reach for a real C2PA SDK instead.</text>
+</svg>
