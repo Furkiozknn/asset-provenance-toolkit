@@ -4,7 +4,7 @@
 
 Embed and extract generation provenance — capability, provider, params, job id — directly in the files an AI pipeline produces, so the record travels with the asset instead of living only in a database row. A provider-agnostic generalization of the classic "drag the PNG back into the UI to see its generation parameters" pattern (AUTOMATIC1111, ComfyUI), applicable to any file and any generation backend.
 
-Part of the same small ecosystem as [`ai-job-gateway`](https://github.com/Furkiozknn/ai-job-gateway), [`prompt-template-manager`](https://github.com/Furkiozknn/prompt-template-manager), and [`model-comparison-harness`](https://github.com/Furkiozknn/model-comparison-harness) — coupled only through documented HTTP contracts, never through a shared Python dependency (see [ADR-006](https://github.com/Furkiozknn/Furkiozknn/blob/claude/ai-creative-platform-research-fwh2vt/research/lab/DECISIONS.md)).
+Part of the same small ecosystem as [`ai-job-gateway`](https://github.com/Furkiozknn/ai-job-gateway), [`prompt-template-manager`](https://github.com/Furkiozknn/prompt-template-manager), and [`model-comparison-harness`](https://github.com/Furkiozknn/model-comparison-harness) — coupled only through documented HTTP contracts, never through a shared Python dependency (see [ADR-006](https://github.com/Furkiozknn/Furkiozknn/blob/main/research/lab/DECISIONS.md)).
 
 ## Why
 
