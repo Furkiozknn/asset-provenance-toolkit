@@ -16,7 +16,7 @@ A generated image or video is only as reproducible as the metadata that survives
 
 ## What it does
 
-- **Embed** a `Provenance` record (capability, provider, params, optional job id / source URL / result / arbitrary `extra` fields) into a file.
+- **Embed** a `Provenance` record (capability, provider, params, optional job id / source URL / result / arbitrary `extra` fields) into a file — natively for PNG, JPEG and the MP4/QuickTime family, via a sidecar for anything else.
 - **Extract** it back out, as JSON.
 - **Verify** whether a file has provenance, with a scriptable exit code (or `--json` for machine-readable output).
 - **Strip** it, when you want to publish a file without its generation history attached.
@@ -42,17 +42,22 @@ uv run aprov verify cat.png
 
 ## Backends
 
-<img src="assets/backends.svg" alt="Three backends behind one call: PNG gets an ai-provenance text chunk via Pillow, switching to compressed zTXt past about 2 KB and re-saving without touching pixel data; JPEG gets a private APP1 segment tagged AIPROV1 spliced straight into the marker structure so the image is never re-encoded; everything else gets a sidecar JSON file. Extraction always falls back to the sidecar." width="100%">
+<img src="assets/backends.svg" alt="Four backends behind one call: PNG gets an ai-provenance text chunk via Pillow, switching to compressed zTXt past about 2 KB and re-saving without touching pixel data; JPEG gets a private APP1 segment tagged AIPROV1 spliced straight into the marker structure so the image is never re-encoded; MP4, M4V, M4A and MOV get a uuid box appended after the media data, because the chunk offsets in moov are absolute and anything inserted earlier would leave a file that parses but does not decode; everything else gets a sidecar JSON file. Extraction always falls back to the sidecar." width="100%">
 
 | File type | Backend | How |
 |---|---|---|
 | `.png` | native | An `ai-provenance` chunk via Pillow — `tEXt` normally, `zTXt` (zlib-compressed, the same tradeoff ComfyUI makes for its embedded workflow JSON) once the record passes ~2 KB. Other text chunks are preserved, and the image is re-saved without touching pixel data (`img.copy()` after `img.load()`) — genuinely lossless. |
 | `.jpg` / `.jpeg` | native | A private APP1 marker segment (tagged `AIPROV1\0`, distinct from EXIF's `Exif\0\0` or XMP's URI tag so it can never collide with either) spliced directly into the file's marker structure. Unlike the PNG backend, this never decodes or re-encodes the image — JPEG recompression is lossy, so this backend edits container bytes only, leaving every other byte (including all scan/pixel data) untouched. Capped at ~64 KB of provenance JSON per file, since a single marker segment's length field is 2 bytes; `embed` raises a clear error rather than silently truncating if a record is that large. |
+| `.mp4` / `.m4v` / `.m4a` / `.mov` | native | A `uuid` box — the ISO base media format's own extension point for private data, the same mechanism XMP uses — tagged with this tool's own UUID and **appended after the media data**. Nothing before the end of `mdat` ever moves, because `stco`/`co64` hold *absolute file offsets* into it; shift those by even one byte and the file still parses, still reports the right duration, and no longer decodes. Any edit that would have to relocate bytes inside that protected region is refused rather than performed. |
 | anything else | sidecar | A `<file>.provenance.json` file next to the asset. |
 
 `extract()` always checks the sidecar as a fallback, even for PNG/JPEG — a sidecar can legitimately exist next to an image whose embedded record was stripped by some other tool along the way.
 
-An MP4/QuickTime atom backend is a natural next step, deliberately left for later — video container formats are involved enough to deserve their own pass rather than being squeezed in alongside this one.
+Video is where a sidecar hurts most, which is why the MP4 backend exists: a generated clip is the asset most likely to leave as a single file — uploaded, re-shared, dropped into an edit — and a `.provenance.json` next to it survives none of that.
+
+It is also the backend with the sharpest failure mode, and worth spelling out. Inserting metadata near the front of an MP4, the way the JPEG backend does, produces a file that passes every structural check and decodes to nothing — on an `ffmpeg`-encoded clip, `ffprobe` still reports the correct codec and duration while decoding dies on the first frame with `Invalid NAL unit size`. The suite keeps that insert as a negative control: it performs it and asserts that the chunk offset in `stco` now lands on different bytes, right next to the tests that prove the real path leaves that offset pointing where it did.
+
+WebM/Matroska is a genuinely different container (EBML, not ISO base media) and still falls back to the sidecar.
 
 ## Relationship to C2PA / Content Credentials
 
@@ -73,6 +78,11 @@ aprov embed output.png --capability image-generate --provider flux-2 \
 # Dispatch is by extension - this works exactly the same way on a JPEG
 aprov embed output.jpg --capability image-generate --provider flux-2 \
     --params '{"prompt": "a red sneaker"}'
+
+# ...and on video: the record goes into the container, the frames are untouched
+aprov embed clip.mp4 --capability video-generate --provider mock-video \
+    --params '{"prompt": "a red sneaker rotating", "seed": 42}'
+# embedded provenance into clip.mp4 (mp4 backend)
 
 # Extract it back out
 aprov extract output.png
@@ -102,7 +112,7 @@ provenance = Provenance(
     provider="flux-2",
     params={"prompt": "a red sneaker", "seed": 42},
 )
-embed("output.png", provenance)   # also works unchanged for "output.jpg"
+embed("output.png", provenance)   # unchanged for "output.jpg", "clip.mp4", "clip.mov"
 
 found = extract("output.png")
 assert found.provider == "flux-2"
@@ -137,12 +147,23 @@ Add new fields through `extra`, not by changing what an old file already has emb
 uv run pytest -v
 ```
 
+125 tests, no network and no external binaries — the MP4 fixtures are ISO base media files the suite builds itself, which is what lets the chunk-offset assertions name an exact byte.
+
+There is one check that deliberately does need a binary, and it is the one worth running before trusting the video path:
+
+```bash
+uv run python arac/gercek-video-dogrula.py
+```
+
+It encodes real clips with `ffmpeg` (both box layouts, a `.mov`, an audio-only `.m4a`), embeds a record into each, and compares the sha256 of the **decoded** output before and after. Structure is not the claim; frame data is. It finishes with the negative control — the same record spliced in before `mdat`, which must come out broken — so a pass means the check still bites. CI runs it on every push.
+
 ## What this tool does NOT do
 
 - **It is not a cryptographic authenticity claim.** Unlike C2PA/Content Credentials, nothing this tool writes is signed, hashed against the pixel data, or otherwise tamper-evident. Anyone with file access — including the exact commands this CLI ships — can edit, forge, or strip a provenance record as easily as they could edit any other metadata. Treat an `ai-provenance` record as a note to your future self and teammates, not as proof of origin for a third party.
 - **It does not poll or wait.** `from-job` requires the job to already be in `ready` status on the gateway; it makes one GET request and fails cleanly otherwise.
 - **It does not batch.** Each CLI invocation operates on one file; wrap it in a shell loop for a directory of outputs.
-- **It has no native video backend.** MP4/QuickTime/WebM all fall back to the sidecar today.
+- **It does not rewrite chunk offsets.** The MP4 backend appends its box after the media data and refuses any edit that would move bytes `stco`/`co64` point at, rather than rewriting the sample tables to compensate. That is the safe half of the problem; the other half is a much larger piece of work with a much worse failure mode.
+- **It has no WebM/Matroska backend.** WebM is EBML rather than ISO base media, so it shares nothing with the MP4 backend and still falls back to the sidecar.
 - **The JPEG backend is a private marker, not real EXIF/XMP.** A generic EXIF viewer or `exiftool` won't surface an `ai-provenance` record embedded via this tool's JPEG backend — only `aprov extract` (or the sidecar, if present) will. This was a deliberate simplicity/dependency tradeoff, not an oversight: writing genuine, spec-compliant EXIF without a recompression pass is materially more work than the private-marker approach, for a tool whose primary reader is itself.
 
 ## License
