@@ -4,6 +4,10 @@
 
 Embed and extract generation provenance — capability, provider, params, job id — directly in the files an AI pipeline produces, so the record travels with the asset instead of living only in a database row. A provider-agnostic generalization of the classic "drag the PNG back into the UI to see its generation parameters" pattern (AUTOMATIC1111, ComfyUI), applicable to any file and any generation backend.
 
+![aprov embedding provenance into a PNG and reading it back: capability, provider, params and schema version come straight out of the file](assets/demo.gif)
+
+<sub>Real output. The PNG is written, the provenance is embedded into it, and <code>aprov extract</code> reads it back out of the same file — no database in the loop.</sub>
+
 Part of the same small ecosystem as [`ai-job-gateway`](https://github.com/Furkiozknn/ai-job-gateway), [`prompt-template-manager`](https://github.com/Furkiozknn/prompt-template-manager), and [`model-comparison-harness`](https://github.com/Furkiozknn/model-comparison-harness) — coupled only through documented HTTP contracts, never through a shared Python dependency.
 
 ## Why
