@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0.0",
+  "id": "asset-provenance-toolkit",
+  "owner": "Furkiozknn",
+  "repository": "https://github.com/Furkiozknn/asset-provenance-toolkit",
+  "homepage": null,
+  "releases": "https://github.com/Furkiozknn/asset-provenance-toolkit/releases",
+  "status": "active",
+  "category": "developer-tool",
+  "platform": [
+    "cli",
+    "library"
+  ],
+  "primary_language": "Python",
+  "technologies": [
+    "Python 3.11+",
+    "PNG text chunks",
+    "JPEG APP1 markers"
+  ],
+  "version": "0.1.0",
+  "license": "MIT",
+  "topics": [
+    "ai-transparency",
+    "audit-trail",
+    "c2pa",
+    "cli",
+    "content-authenticity",
+    "exif",
+    "generative-ai",
+    "image-metadata",
+    "metadata",
+    "provenance",
+    "python"
+  ],
+  "summary": "Which model, provider, params and job made this file - written into the file itself, so the record outlives the database row. PNG gets a lossless text chunk, JPEG a private APP1 marker spliced into container bytes with no re-encoding, everything else a sidecar. Honest about what C2PA does that this does not. 86 tests.",
+  "key_features": [
+    "Which model, provider, parameters and job made this file - written into the file itself, so the record outlives the database row",
+    "PNG gets a lossless text chunk; JPEG gets a private APP1 marker spliced into container bytes with no re-encoding",
+    "Anything else gets a sidecar file rather than a silent failure",
+    "Honest about what C2PA does that this does not"
+  ],
+  "media": {
+    "hero": "assets/banner.svg",
+    "screenshots": [],
+    "gifs": [],
+    "videos": []
+  },
+  "tests": {
+    "count": 86,
+    "source": "`86 passed`",
+    "measured": "2026-09-15"
+  },
+  "ci": {
+    "workflows": [
+      "ci.yml",
+      "yayinla.yml"
+    ],
+    "badge": "https://github.com/Furkiozknn/asset-provenance-toolkit/actions/workflows/ci.yml/badge.svg"
+  },
+  "docs": {
+    "readme": "README.md",
+    "changelog": null,
+    "roadmap": null,
+    "security": "SECURITY.md",
+    "contributing": "CONTRIBUTING.md",
+    "license_file": "LICENSE"
+  },
+  "social": {
+    "headline": "Provenance that lives in the file, not in a database row you will lose.",
+    "hashtags": [
+      "provenance",
+      "c2pa",
+      "aitransparency",
+      "python"
+    ],
+    "primary_link": "https://github.com/Furkiozknn/asset-provenance-toolkit"
+  },
+  "provenance": {
+    "generated_at": "2026-09-22",
+    "generator": "ghcc/gen_meta.py",
+    "rule": "mechanical fields read from the repository and the GitHub API; editorial fields hand-written and reviewed; no field is generated from a guess"
+  }
+}
