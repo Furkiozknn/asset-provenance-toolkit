@@ -271,3 +271,79 @@ def test_from_job_against_an_unreachable_gateway_is_a_clean_error(monkeypatch, c
         _run(monkeypatch, ["from-job", str(sample_png), "--gateway-url", "http://gw.test", "--job-id", "j"])
     assert exc.value.code == 1
     assert capsys.readouterr().err.startswith("error: could not fetch job")
+
+
+# --- temp files and large inputs ---------------------------------------------
+
+
+@posix_only
+def test_a_planted_symlink_at_the_old_fixed_temp_name_is_not_followed(any_asset: Path, tmp_path: Path):
+    # The temp name used to be the fixed `.<name>.aprov-tmp`. Anyone who can
+    # write to the directory could plant a symlink there and have the asset's
+    # bytes written through it into a file of their choosing.
+    victim = tmp_path / "victim.txt"
+    victim.write_text("do not overwrite", encoding="utf-8")
+    target = _written_file(any_asset)
+    planted = target.with_name(f".{target.name}.aprov-tmp")
+    planted.symlink_to(victim)
+
+    embed(any_asset, _prov())
+
+    assert victim.read_text(encoding="utf-8") == "do not overwrite"
+    assert extract(any_asset) is not None
+
+
+@posix_only
+def test_a_new_sidecar_gets_the_umask_default_mode(sample_wav: Path):
+    old = os.umask(0o022)
+    try:
+        embed(sample_wav, _prov())
+    finally:
+        os.umask(old)
+    assert stat.S_IMODE(sidecar_path(sample_wav).stat().st_mode) == 0o644
+
+
+def _sparse_mp4(path: Path, media_bytes: int) -> None:
+    """ftyp + an mdat of `media_bytes` zero bytes, written sparsely so the
+    test does not pay for the disk space it describes."""
+    with open(path, "wb") as fh:
+        fh.write(FTYP)
+        fh.write((8 + media_bytes).to_bytes(4, "big") + b"mdat")
+        fh.truncate(len(FTYP) + 8 + media_bytes)
+
+
+def test_mp4_embed_extract_strip_do_not_load_the_whole_file(tmp_path: Path):
+    import tracemalloc
+
+    clip = tmp_path / "big.mp4"
+    media = 64 * 1024 * 1024
+    _sparse_mp4(clip, media)
+    size_before = clip.stat().st_size
+
+    tracemalloc.start()
+    try:
+        embed(clip, _prov())
+        assert extract(clip) == extract(clip)
+        assert strip(clip) is True
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert clip.stat().st_size == size_before
+    # A whole-file read would peak above 64 MiB; streaming stays near the
+    # 1 MiB copy buffer.
+    assert peak < 8 * 1024 * 1024, f"peak {peak} bytes"
+
+
+def test_mp4_record_larger_than_the_limit_is_refused_not_loaded(tmp_path: Path):
+    from asset_provenance_toolkit import mp4_backend
+
+    clip = tmp_path / "crafted.mp4"
+    declared = mp4_backend._MAX_RECORD + 1
+    with open(clip, "wb") as fh:
+        fh.write(FTYP)
+        fh.write((24 + declared).to_bytes(4, "big") + b"uuid" + _UUID_BYTES)
+        fh.truncate(len(FTYP) + 24 + declared)
+
+    with pytest.raises(ProvenanceError, match="limit"):
+        extract(clip)

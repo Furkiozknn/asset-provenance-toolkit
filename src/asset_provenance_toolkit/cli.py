@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 
+from . import __version__
 from .core import embed, extract, strip
 from .gateway_client import JobFetchError, fetch_job_record
 from .schema import Provenance, ProvenanceError
@@ -134,6 +135,7 @@ def _cmd_from_job(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="aprov", description="asset-provenance-toolkit")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     embed_parser = subparsers.add_parser("embed", help="embed provenance into a file")

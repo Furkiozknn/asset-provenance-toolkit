@@ -46,12 +46,13 @@ Two details fall out of that rule:
 
 from __future__ import annotations
 
+import os
 import uuid as _uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import BinaryIO, Callable, Optional, Union
 
-from ._atomic import write_atomic
+from ._atomic import write_atomic_with
 from .schema import Provenance
 
 #: This tool's own `uuid` box identifier. Randomly generated once and frozen:
@@ -65,6 +66,20 @@ _BOX_HEADER = 8
 _LARGE_HEADER = 16
 _UUID_HEADER = _BOX_HEADER + 16
 _MAX_32 = 0xFFFFFFFF
+
+#: Largest record `extract` will read out of our box. A real record is a
+#: few KB; a crafted file declaring a multi-GB box must not make a read-only
+#: command allocate that much memory.
+_MAX_RECORD = 16 * 1024 * 1024
+
+#: Copy buffer for the streaming rewrite. Video files are routinely larger
+#: than the memory it would be reasonable to spend on adding a few hundred
+#: bytes of metadata, so nothing here ever holds the whole file.
+_COPY_CHUNK = 1024 * 1024
+
+#: Reads `n` bytes at absolute offset `o` - backed by a bytes object in the
+#: tests, by a seekable file everywhere else.
+_ReadAt = Callable[[int, int], bytes]
 
 #: Boxes whose bytes are addressed by absolute offset from elsewhere in the
 #: file. `mdat` is the one that matters in practice; `idat` is its item-data
@@ -101,21 +116,22 @@ class _Box:
         return self.start + self.header
 
 
-def _walk(data: bytes, path: str | Path) -> list[_Box]:
-    """Parse the flat top-level box sequence. Raises UnreadableMp4Error on
-    anything that does not account for the whole file exactly - a partial
-    parse is how a corrupt file gets silently half-edited."""
+def _walk_with(read_at: _ReadAt, total: int, path: str | Path) -> list[_Box]:
+    """Parse the flat top-level box sequence, reading only box headers.
+    Raises UnreadableMp4Error on anything that does not account for the
+    whole file exactly - a partial parse is how a corrupt file gets silently
+    half-edited."""
     boxes: list[_Box] = []
     offset = 0
-    total = len(data)
     while offset < total:
         if offset + _BOX_HEADER > total:
             raise UnreadableMp4Error(
                 f"{path}: not a readable MP4/QuickTime file "
                 f"(truncated box header at byte {offset})"
             )
-        size = int.from_bytes(data[offset : offset + 4], "big")
-        box_type = data[offset + 4 : offset + 8]
+        head = read_at(offset, _BOX_HEADER)
+        size = int.from_bytes(head[:4], "big")
+        box_type = head[4:8]
         header = _BOX_HEADER
         open_ended = False
 
@@ -125,7 +141,7 @@ def _walk(data: bytes, path: str | Path) -> list[_Box]:
                     f"{path}: not a readable MP4/QuickTime file "
                     f"(truncated 64-bit box size at byte {offset})"
                 )
-            size = int.from_bytes(data[offset + 8 : offset + 16], "big")
+            size = int.from_bytes(read_at(offset + 8, 8), "big")
             header = _LARGE_HEADER
         elif size == 0:
             size = total - offset
@@ -149,10 +165,23 @@ def _walk(data: bytes, path: str | Path) -> list[_Box]:
     return boxes
 
 
-def _is_ours(data: bytes, box: _Box) -> bool:
+def _walk(data: bytes, path: str | Path) -> list[_Box]:
+    """`_walk_with` over an in-memory file (used by the tests)."""
+    return _walk_with(lambda o, n: data[o : o + n], len(data), path)
+
+
+def _file_reader(fh: BinaryIO) -> _ReadAt:
+    def read_at(offset: int, n: int) -> bytes:
+        fh.seek(offset)
+        return fh.read(n)
+
+    return read_at
+
+
+def _is_ours(read_at: _ReadAt, box: _Box) -> bool:
     if box.type != b"uuid":
         return False
-    return data[box.payload_start : box.payload_start + 16] == _UUID_BYTES
+    return read_at(box.payload_start, 16) == _UUID_BYTES
 
 
 def _guard_offset(boxes: list[_Box]) -> int:
@@ -174,27 +203,31 @@ def _our_box(provenance: Provenance) -> bytes:
     return size.to_bytes(4, "big") + b"uuid" + _UUID_BYTES + payload
 
 
-def _emit(data: bytes, box: _Box, path: str | Path) -> bytes:
-    """A box's bytes, with a size-0 header rewritten to its real length so
+#: One piece of the rewritten file: literal bytes, or a (start, end) range
+#: copied verbatim from the original.
+_Piece = Union[bytes, tuple[int, int]]
+
+
+def _emit(box: _Box, path: str | Path) -> list[_Piece]:
+    """A box as pieces, with a size-0 header rewritten to its real length so
     something can legally follow it. The rewrite lands in the 4-byte field
     that is already there, so no byte moves."""
-    raw = data[box.start : box.end]
     if not box.open_ended:
-        return raw
+        return [(box.start, box.end)]
     real = box.end - box.start
     if real > _MAX_32:
         raise UnsafeMp4EditError(
             f"{path}: the final box {box.type.decode('latin1')!r} is open-ended and larger than "
             "4 GiB; closing it would need a 64-bit header, which would shift media data"
         )
-    return real.to_bytes(4, "big") + raw[4:]
+    return [real.to_bytes(4, "big"), (box.start + 4, box.end)]
 
 
-def _rebuild(data: bytes, path: str | Path, *, new_box: Optional[bytes]) -> bytes:
-    boxes = _walk(data, path)
+def _plan(read_at: _ReadAt, total: int, path: str | Path, *, new_box: Optional[bytes]) -> list[_Piece]:
+    boxes = _walk_with(read_at, total, path)
     guard = _guard_offset(boxes)
 
-    stale = [b for b in boxes if _is_ours(data, b)]
+    stale = [b for b in boxes if _is_ours(read_at, b)]
     trapped = [b for b in stale if b.start < guard]
     if trapped:
         raise UnsafeMp4EditError(
@@ -212,36 +245,81 @@ def _rebuild(data: bytes, path: str | Path, *, new_box: Optional[bytes]) -> byte
     if kept and kept[-1].type == b"mfra":
         tail = [kept.pop()]
 
-    pieces = [_emit(data, b, path) for b in kept]
+    pieces: list[_Piece] = []
+    for b in kept:
+        pieces.extend(_emit(b, path))
     if new_box is not None:
         pieces.append(new_box)
-    pieces.extend(_emit(data, b, path) for b in tail)
-    return b"".join(pieces)
+    for b in tail:
+        pieces.extend(_emit(b, path))
+    return pieces
+
+
+def _rebuild(data: bytes, path: str | Path, *, new_box: Optional[bytes]) -> bytes:
+    """In-memory form of the rewrite, kept for tests and small inputs."""
+    pieces = _plan(lambda o, n: data[o : o + n], len(data), path, new_box=new_box)
+    return b"".join(p if isinstance(p, bytes) else data[p[0] : p[1]] for p in pieces)
+
+
+def _write_pieces(src: BinaryIO, pieces: list[_Piece], dst: BinaryIO) -> None:
+    for piece in pieces:
+        if isinstance(piece, bytes):
+            dst.write(piece)
+            continue
+        start, end = piece
+        src.seek(start)
+        remaining = end - start
+        while remaining:
+            chunk = src.read(min(_COPY_CHUNK, remaining))
+            if not chunk:  # the file shrank under us; do not write a short copy
+                raise UnreadableMp4Error("file changed size while it was being rewritten")
+            dst.write(chunk)
+            remaining -= len(chunk)
+
+
+def _rewrite(path: str | Path, *, new_box: Optional[bytes], only_if_ours: bool) -> bool:
+    with open(path, "rb") as src:
+        total = os.fstat(src.fileno()).st_size
+        read_at = _file_reader(src)
+        if only_if_ours and not any(_is_ours(read_at, b) for b in _walk_with(read_at, total, path)):
+            return False
+        pieces = _plan(read_at, total, path, new_box=new_box)
+
+    def copy(dst: BinaryIO) -> None:
+        # Reopened here, and closed again before write_atomic_with renames
+        # over the original: Windows refuses to replace a file that is
+        # still open.
+        with open(path, "rb") as again:
+            _write_pieces(again, pieces, dst)
+
+    write_atomic_with(path, copy)
+    return True
 
 
 def embed_mp4(path: str | Path, provenance: Provenance) -> None:
     """Append (replacing any stale copy of) our provenance box to the MP4 at
-    `path`. Every byte of media data keeps its exact file offset."""
-    data = Path(path).read_bytes()
-    new_data = _rebuild(data, path, new_box=_our_box(provenance))
-    write_atomic(path, new_data)
+    `path`. Every byte of media data keeps its exact file offset. The file
+    is streamed, never loaded whole, so memory use does not grow with it."""
+    _rewrite(path, new_box=_our_box(provenance), only_if_ours=False)
 
 
 def extract_mp4(path: str | Path) -> Optional[Provenance]:
-    data = Path(path).read_bytes()
-    for box in _walk(data, path):
-        if _is_ours(data, box):
-            return Provenance.from_json(data[box.payload_start + 16 : box.end])
+    with open(path, "rb") as fh:
+        total = os.fstat(fh.fileno()).st_size
+        read_at = _file_reader(fh)
+        for box in _walk_with(read_at, total, path):
+            if _is_ours(read_at, box):
+                start = box.payload_start + 16
+                if box.end - start > _MAX_RECORD:
+                    raise UnreadableMp4Error(
+                        f"{path}: provenance box declares {box.end - start} bytes of record, "
+                        f"more than the {_MAX_RECORD}-byte limit; refusing to load it"
+                    )
+                return Provenance.from_json(read_at(start, box.end - start))
     return None
 
 
 def strip_mp4(path: str | Path) -> bool:
     """Remove our provenance box, leaving media data at its original offsets.
     Returns False (no-op) if there was nothing to remove."""
-    data = Path(path).read_bytes()
-    boxes = _walk(data, path)
-    if not any(_is_ours(data, b) for b in boxes):
-        return False
-    new_data = _rebuild(data, path, new_box=None)
-    write_atomic(path, new_data)
-    return True
+    return _rewrite(path, new_box=None, only_if_ours=True)
