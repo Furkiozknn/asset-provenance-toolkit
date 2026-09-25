@@ -51,6 +51,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from ._atomic import write_atomic
 from .schema import Provenance
 
 #: This tool's own `uuid` box identifier. Randomly generated once and frozen:
@@ -223,15 +224,14 @@ def embed_mp4(path: str | Path, provenance: Provenance) -> None:
     `path`. Every byte of media data keeps its exact file offset."""
     data = Path(path).read_bytes()
     new_data = _rebuild(data, path, new_box=_our_box(provenance))
-    Path(path).write_bytes(new_data)
+    write_atomic(path, new_data)
 
 
 def extract_mp4(path: str | Path) -> Optional[Provenance]:
     data = Path(path).read_bytes()
     for box in _walk(data, path):
         if _is_ours(data, box):
-            raw_json = data[box.payload_start + 16 : box.end].decode("utf-8")
-            return Provenance.from_json(raw_json)
+            return Provenance.from_json(data[box.payload_start + 16 : box.end])
     return None
 
 
@@ -243,5 +243,5 @@ def strip_mp4(path: str | Path) -> bool:
     if not any(_is_ours(data, b) for b in boxes):
         return False
     new_data = _rebuild(data, path, new_box=None)
-    Path(path).write_bytes(new_data)
+    write_atomic(path, new_data)
     return True
