@@ -24,21 +24,46 @@ A generated image or video is only as reproducible as the metadata that survives
 
 ## Quickstart
 
+Needs Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/). Not on PyPI yet, so it runs from a clone:
+
 ```bash
-uv sync --group dev
+git clone https://github.com/Furkiozknn/asset-provenance-toolkit.git
+cd asset-provenance-toolkit
+uv sync
+
+# Any PNG, JPEG, MP4/MOV or other file works. This makes a small test image:
+uv run python -c "from PIL import Image; Image.new('RGB', (64, 64), 'red').save('cat.png')"
 
 uv run aprov embed cat.png --capability image-generate --provider flux-2 \
     --params '{"prompt": "a red sneaker on a white background", "seed": 42}'
 # embedded provenance into cat.png (png backend)
 
 uv run aprov extract cat.png --compact
-# {"capability":"image-generate","created_at":"2026-09-02T12:00:00+00:00", ...}
+# {"capability":"image-generate","created_at":"2026-09-25T09:50:00.000000+00:00", ...}
 
 uv run aprov verify cat.png
 # OK: cat.png has provenance (capability='image-generate', provider='flux-2', ...)
 ```
 
 `cat.png` now carries its own generation history. Copy it, rename it, send it to someone else — `aprov extract cat.png` still works, with no database or job id lookup involved.
+
+To have a plain `aprov` command on your `PATH` (as in the examples below) instead of `uv run aprov`, install it as a tool:
+
+```bash
+uv tool install git+https://github.com/Furkiozknn/asset-provenance-toolkit
+aprov --version
+```
+
+When something is wrong, the CLI says so and exits 1, without a Python traceback:
+
+```text
+$ aprov verify plain.png
+FAIL: no provenance found for plain.png
+$ aprov extract broken.jpg
+error: broken.jpg: not a readable JPEG file (missing SOI marker)
+$ aprov from-job cat.png --gateway-url http://localhost:9 --job-id abc
+error: could not fetch job 'abc' from http://localhost:9: ConnectError: [Errno 111] Connection refused
+```
 
 ## Backends
 
@@ -53,7 +78,7 @@ uv run aprov verify cat.png
 
 `extract()` always checks the sidecar as a fallback, even for PNG/JPEG — a sidecar can legitimately exist next to an image whose embedded record was stripped by some other tool along the way.
 
-Every backend writes the new bytes to a temporary file beside the original and renames it into place, so an interrupted write (disk full, killed process) leaves the original file as it was, never half-written. The original's permission bits are kept, and a symlink is followed rather than replaced. A record that cannot be read — bytes that are not UTF-8, a field of the wrong JSON type — is reported as `error: ...` by the CLI, not as a Python traceback.
+Every backend writes the new bytes to a randomly named temporary file beside the original and renames it into place, so an interrupted write (disk full, killed process) leaves the original file as it was, never half-written. The original's permission bits are kept, and a symlink is followed rather than replaced. The MP4 backend streams the file rather than loading it, so memory use stays at a few megabytes whatever the size of the clip (embed + extract + strip on a 2 GiB file peaked at about 2 MiB of Python allocations). A record that cannot be read — bytes that are not UTF-8, a field of the wrong JSON type — is reported as `error: ...` by the CLI, not as a Python traceback.
 
 Video is where a sidecar hurts most, which is why the MP4 backend exists: a generated clip is the asset most likely to leave as a single file — uploaded, re-shared, dropped into an edit — and a `.provenance.json` next to it survives none of that.
 
@@ -146,10 +171,11 @@ Add new fields through `extra`, not by changing what an old file already has emb
 ## Testing
 
 ```bash
+uv sync --group dev
 uv run pytest -v
 ```
 
-157 tests, no network and no external binaries — the MP4 fixtures are ISO base media files the suite builds itself, which is what lets the chunk-offset assertions name an exact byte.
+164 tests, no network and no external binaries — the MP4 fixtures are ISO base media files the suite builds itself, which is what lets the chunk-offset assertions name an exact byte.
 
 There is one check that deliberately does need a binary, and it is the one worth running before trusting the video path:
 
