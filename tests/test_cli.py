@@ -232,3 +232,41 @@ def test_from_job_fetch_error_exits_nonzero(monkeypatch, capsys, sample_png: Pat
         )
     assert exc_info.value.code == 1
     assert "boom" in capsys.readouterr().err
+
+
+def test_embed_and_extract_roundtrip_on_video(monkeypatch, capsys, sample_mp4: Path):
+    _run(
+        monkeypatch,
+        [
+            "embed",
+            str(sample_mp4),
+            "--capability",
+            "video-generate",
+            "--provider",
+            "mock-video",
+            "--params",
+            '{"prompt": "a red sneaker rotating", "seed": 42}',
+        ],
+    )
+    out = capsys.readouterr().out
+    assert "(mp4 backend)" in out
+
+    _run(monkeypatch, ["extract", str(sample_mp4), "--compact"])
+    extracted = json.loads(capsys.readouterr().out)
+    assert extracted["capability"] == "video-generate"
+    assert extracted["params"]["seed"] == 42
+
+
+def test_verify_on_video_without_provenance_exits_nonzero(monkeypatch, capsys, sample_mp4: Path):
+    with pytest.raises(SystemExit) as exc:
+        _run(monkeypatch, ["verify", str(sample_mp4)])
+    assert exc.value.code != 0
+
+
+def test_a_corrupt_video_is_reported_as_an_error_not_a_traceback(monkeypatch, capsys, tmp_path: Path):
+    path = tmp_path / "broken.mp4"
+    path.write_bytes(b"not a video at all")
+    with pytest.raises(SystemExit) as exc:
+        _run(monkeypatch, ["extract", str(path)])
+    assert exc.value.code != 0
+    assert "error:" in capsys.readouterr().err

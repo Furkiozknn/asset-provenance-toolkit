@@ -15,9 +15,17 @@ Ekosistem: **python**
 ```
 git clone https://github.com/Furkiozknn/asset-provenance-toolkit.git
 cd asset-provenance-toolkit
+uv sync --group dev          # CI de tam olarak bunu calistiriyor
+```
+
+`uv` yoksa ([kurulum](https://docs.astral.sh/uv/getting-started/installation/)),
+aynisini pip ile:
+
+```
 python -m venv .venv
 .venv\Scripts\activate      # Linux/macOS: source .venv/bin/activate
-pip install -e ".[dev]"   # yoksa: pip install -r requirements.txt
+pip install -e .
+pip install pytest
 ```
 
 ## 2. Degisikligi yapmadan once
