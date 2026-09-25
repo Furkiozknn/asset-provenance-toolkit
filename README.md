@@ -24,15 +24,22 @@ A generated image or video is only as reproducible as the metadata that survives
 
 ## Quickstart
 
+Needs Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/). Not on PyPI yet, so it runs from a clone:
+
 ```bash
-uv sync --group dev
+git clone https://github.com/Furkiozknn/asset-provenance-toolkit.git
+cd asset-provenance-toolkit
+uv sync
+
+# Any PNG, JPEG, MP4/MOV or other file works. This makes a small test image:
+uv run python -c "from PIL import Image; Image.new('RGB', (64, 64), 'red').save('cat.png')"
 
 uv run aprov embed cat.png --capability image-generate --provider flux-2 \
     --params '{"prompt": "a red sneaker on a white background", "seed": 42}'
 # embedded provenance into cat.png (png backend)
 
 uv run aprov extract cat.png --compact
-# {"capability":"image-generate","created_at":"2026-09-02T12:00:00+00:00", ...}
+# {"capability":"image-generate","created_at":"2026-09-25T09:50:00.000000+00:00", ...}
 
 uv run aprov verify cat.png
 # OK: cat.png has provenance (capability='image-generate', provider='flux-2', ...)
@@ -40,18 +47,38 @@ uv run aprov verify cat.png
 
 `cat.png` now carries its own generation history. Copy it, rename it, send it to someone else — `aprov extract cat.png` still works, with no database or job id lookup involved.
 
+To have a plain `aprov` command on your `PATH` (as in the examples below) instead of `uv run aprov`, install it as a tool:
+
+```bash
+uv tool install git+https://github.com/Furkiozknn/asset-provenance-toolkit
+aprov --version
+```
+
+When something is wrong, the CLI says so and exits 1, without a Python traceback:
+
+```text
+$ aprov verify plain.png
+FAIL: no provenance found for plain.png
+$ aprov extract broken.jpg
+error: broken.jpg: not a readable JPEG file (missing SOI marker)
+$ aprov from-job cat.png --gateway-url http://localhost:9 --job-id abc
+error: could not fetch job 'abc' from http://localhost:9: ConnectError: [Errno 111] Connection refused
+```
+
 ## Backends
 
-<img src="assets/backends.svg" alt="Four backends behind one call: PNG gets an ai-provenance text chunk via Pillow, switching to compressed zTXt past about 2 KB and re-saving without touching pixel data; JPEG gets a private APP1 segment tagged AIPROV1 spliced straight into the marker structure so the image is never re-encoded; MP4, M4V, M4A and MOV get a uuid box appended after the media data, because the chunk offsets in moov are absolute and anything inserted earlier would leave a file that parses but does not decode; everything else gets a sidecar JSON file. Extraction always falls back to the sidecar." width="100%">
+<img src="assets/backends.svg" alt="Four backends behind one call: PNG gets an ai-provenance text chunk spliced in before IEND, switching to compressed zTXt past about 2 KB, with the image never decoded and every other chunk copied byte for byte; JPEG gets a private APP1 segment tagged AIPROV1 spliced straight into the marker structure so the image is never re-encoded; MP4, M4V, M4A and MOV get a uuid box appended after the media data, because the chunk offsets in moov are absolute and anything inserted earlier would leave a file that parses but does not decode; everything else gets a sidecar JSON file. Extraction always falls back to the sidecar." width="100%">
 
 | File type | Backend | How |
 |---|---|---|
-| `.png` | native | An `ai-provenance` chunk via Pillow — `tEXt` normally, `zTXt` (zlib-compressed, the same tradeoff ComfyUI makes for its embedded workflow JSON) once the record passes ~2 KB. Other text chunks are preserved, and the image is re-saved without touching pixel data (`img.copy()` after `img.load()`) — genuinely lossless. |
+| `.png` | native | An `ai-provenance` chunk spliced in just before `IEND` — `tEXt` normally, `zTXt` (zlib-compressed, the same tradeoff ComfyUI makes for its embedded workflow JSON) once the record passes ~2 KB. The file is edited as a sequence of chunks and never decoded: `IDAT` and every other chunk, including other tools' text chunks, are copied byte for byte — genuinely lossless. |
 | `.jpg` / `.jpeg` | native | A private APP1 marker segment (tagged `AIPROV1\0`, distinct from EXIF's `Exif\0\0` or XMP's URI tag so it can never collide with either) spliced directly into the file's marker structure. Unlike the PNG backend, this never decodes or re-encodes the image — JPEG recompression is lossy, so this backend edits container bytes only, leaving every other byte (including all scan/pixel data) untouched. Capped at ~64 KB of provenance JSON per file, since a single marker segment's length field is 2 bytes; `embed` raises a clear error rather than silently truncating if a record is that large. |
 | `.mp4` / `.m4v` / `.m4a` / `.mov` | native | A `uuid` box — the ISO base media format's own extension point for private data, the same mechanism XMP uses — tagged with this tool's own UUID and **appended after the media data**. Nothing before the end of `mdat` ever moves, because `stco`/`co64` hold *absolute file offsets* into it; shift those by even one byte and the file still parses, still reports the right duration, and no longer decodes. Any edit that would have to relocate bytes inside that protected region is refused rather than performed. |
 | anything else | sidecar | A `<file>.provenance.json` file next to the asset. |
 
 `extract()` always checks the sidecar as a fallback, even for PNG/JPEG — a sidecar can legitimately exist next to an image whose embedded record was stripped by some other tool along the way.
+
+Every backend writes the new bytes to a randomly named temporary file beside the original and renames it into place, so an interrupted write (disk full, killed process) leaves the original file as it was, never half-written. The original's permission bits are kept, and a symlink is followed rather than replaced. The MP4 backend streams the file rather than loading it, so memory use stays at a few megabytes whatever the size of the clip (embed + extract + strip on a 2 GiB file peaked at about 2 MiB of Python allocations). A record that cannot be read — bytes that are not UTF-8, a field of the wrong JSON type — is reported as `error: ...` by the CLI, not as a Python traceback.
 
 Video is where a sidecar hurts most, which is why the MP4 backend exists: a generated clip is the asset most likely to leave as a single file — uploaded, re-shared, dropped into an edit — and a `.provenance.json` next to it survives none of that.
 
@@ -144,10 +171,11 @@ Add new fields through `extra`, not by changing what an old file already has emb
 ## Testing
 
 ```bash
+uv sync --group dev
 uv run pytest -v
 ```
 
-125 tests, no network and no external binaries — the MP4 fixtures are ISO base media files the suite builds itself, which is what lets the chunk-offset assertions name an exact byte.
+164 tests, no network and no external binaries — the MP4 fixtures are ISO base media files the suite builds itself, which is what lets the chunk-offset assertions name an exact byte.
 
 There is one check that deliberately does need a binary, and it is the one worth running before trusting the video path:
 

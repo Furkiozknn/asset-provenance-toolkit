@@ -21,6 +21,25 @@ class ProvenanceError(Exception):
     """Raised for a malformed or unreadable provenance record."""
 
 
+_JSON_NAMES = {str: "a string", int: "an integer", dict: "an object"}
+
+#: (field, accepted types, may be None). `result` is deliberately absent:
+#: it is whatever the producing job returned, and files already written
+#: with a non-object result must stay readable. `job_id` accepts an int
+#: because some job stores use numeric ids.
+_FIELD_TYPES: tuple[tuple[str, tuple[type, ...], bool], ...] = (
+    ("capability", (str,), False),
+    ("provider", (str,), False),
+    ("params", (dict,), False),
+    ("schema_version", (int,), False),
+    ("job_id", (str, int), True),
+    ("source", (str,), False),
+    ("source_url", (str,), True),
+    ("created_at", (str,), True),
+    ("extra", (dict,), False),
+)
+
+
 @dataclass
 class Provenance:
     capability: str
@@ -37,6 +56,25 @@ class Provenance:
     def __post_init__(self) -> None:
         if self.created_at is None:
             self.created_at = datetime.now(timezone.utc).isoformat()
+        self._check_types()
+
+    def _check_types(self) -> None:
+        """Refuse a record whose field types this tool could not read back.
+
+        Checked on construction, so the same rule guards both directions: a
+        library caller (or a gateway returning an unexpected shape) cannot
+        embed a record that `extract` would later choke on, and a record read
+        from a file with the wrong shape is a ProvenanceError, not a
+        TypeError from somewhere deeper."""
+        for name, kinds, optional in _FIELD_TYPES:
+            value = getattr(self, name)
+            if value is None and optional:
+                continue
+            if not isinstance(value, kinds) or isinstance(value, bool):
+                expected = " or ".join(_JSON_NAMES[k] for k in kinds) + (" or null" if optional else "")
+                raise ProvenanceError(
+                    f"provenance field {name!r} must be {expected}, got {type(value).__name__}"
+                )
 
     def to_json(self, *, pretty: bool = False) -> str:
         data = asdict(self)
@@ -48,7 +86,16 @@ class Provenance:
         return asdict(self)
 
     @classmethod
-    def from_json(cls, text: str) -> "Provenance":
+    def from_json(cls, text: str | bytes) -> "Provenance":
+        """Parse a record read back from a file. `text` may be the raw bytes
+        of the stored payload; bytes that are not UTF-8 are reported as a
+        ProvenanceError like any other malformed record, never as a bare
+        UnicodeDecodeError."""
+        if isinstance(text, (bytes, bytearray)):
+            try:
+                text = bytes(text).decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ProvenanceError(f"provenance data is not valid UTF-8: {exc}") from exc
         try:
             data = json.loads(text)
         except json.JSONDecodeError as exc:
@@ -72,6 +119,9 @@ class Provenance:
             raise ProvenanceError(f"provenance data missing required field(s): {', '.join(missing)}")
 
         known_fields = {f for f in cls.__dataclass_fields__}
-        extra = dict(data.get("extra") or {})
+        extra = data.get("extra") or {}
+        if not isinstance(extra, dict):
+            raise ProvenanceError(f"provenance field 'extra' must be an object, got {type(extra).__name__}")
+        extra = dict(extra)
         kwargs = {k: v for k, v in data.items() if k in known_fields and k != "extra"}
         return cls(extra=extra, **kwargs)

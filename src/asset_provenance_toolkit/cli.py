@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 
+from . import __version__
 from .core import embed, extract, strip
 from .gateway_client import JobFetchError, fetch_job_record
 from .schema import Provenance, ProvenanceError
@@ -38,7 +39,7 @@ def _cmd_embed(args: argparse.Namespace) -> None:
     )
     try:
         backend = embed(args.file, provenance)
-    except (FileNotFoundError, ProvenanceError) as exc:
+    except (OSError, ProvenanceError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)
     print(f"embedded provenance into {args.file} ({backend} backend)")
@@ -47,7 +48,7 @@ def _cmd_embed(args: argparse.Namespace) -> None:
 def _cmd_extract(args: argparse.Namespace) -> None:
     try:
         provenance = extract(args.file)
-    except (FileNotFoundError, ProvenanceError) as exc:
+    except (OSError, ProvenanceError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)
     if provenance is None:
@@ -59,7 +60,7 @@ def _cmd_extract(args: argparse.Namespace) -> None:
 def _cmd_verify(args: argparse.Namespace) -> None:
     try:
         provenance = extract(args.file)
-    except (FileNotFoundError, ProvenanceError) as exc:
+    except (OSError, ProvenanceError) as exc:
         if args.json:
             print(json.dumps({"ok": False, "file": args.file, "error": str(exc)}))
         else:
@@ -84,7 +85,7 @@ def _cmd_verify(args: argparse.Namespace) -> None:
 def _cmd_strip(args: argparse.Namespace) -> None:
     try:
         removed = strip(args.file)
-    except (FileNotFoundError, ProvenanceError) as exc:
+    except (OSError, ProvenanceError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)
     if removed:
@@ -110,19 +111,23 @@ def _cmd_from_job(args: argparse.Namespace) -> None:
         print(f"error: job record is missing expected field(s): {', '.join(missing)}", file=sys.stderr)
         raise SystemExit(1)
 
-    provenance = Provenance(
-        capability=record["capability"],
-        provider=record["provider"],
-        params=record["params"],
-        job_id=record["id"],
-        source="ai-job-gateway",
-        source_url=args.gateway_url,
-        created_at=record.get("created_at"),
-        result=record.get("result"),
-    )
+    try:
+        provenance = Provenance(
+            capability=record["capability"],
+            provider=record["provider"],
+            params=record["params"],
+            job_id=record["id"],
+            source="ai-job-gateway",
+            source_url=args.gateway_url,
+            created_at=record.get("created_at"),
+            result=record.get("result"),
+        )
+    except ProvenanceError as exc:
+        print(f"error: job record from {args.gateway_url} has an unexpected shape: {exc}", file=sys.stderr)
+        raise SystemExit(1)
     try:
         backend = embed(args.file, provenance)
-    except (FileNotFoundError, ProvenanceError) as exc:
+    except (OSError, ProvenanceError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)
     print(f"embedded provenance from job {args.job_id} into {args.file} ({backend} backend)")
@@ -130,6 +135,7 @@ def _cmd_from_job(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="aprov", description="asset-provenance-toolkit")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     embed_parser = subparsers.add_parser("embed", help="embed provenance into a file")
