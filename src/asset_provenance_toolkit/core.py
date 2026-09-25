@@ -7,8 +7,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, NamedTuple, Optional
 
-from . import jpeg_backend, png_backend, sidecar_backend
+from . import jpeg_backend, mp4_backend, png_backend, sidecar_backend
 from .jpeg_backend import JpegPayloadTooLargeError, UnreadableJpegError
+from .mp4_backend import UnreadableMp4Error, UnsafeMp4EditError
 from .png_backend import UnreadablePngError
 from .schema import Provenance, ProvenanceError
 
@@ -25,10 +26,12 @@ class _NativeBackend(NamedTuple):
 
 
 #: Extensions with a native embedding backend. Extend this (and add a new
-#: `*_backend.py` module) as more native formats get support - MP4/QuickTime
-#: atoms are a natural next candidate, deliberately not implemented in v1 to
-#: keep the initial scope to the two most common AI-pipeline image formats
-#: plus the universal sidecar fallback for everything else.
+#: `*_backend.py` module) as more native formats get support; anything not
+#: listed here falls through to the universal sidecar. The ISO base media
+#: family (`.mp4`, `.m4v`, `.m4a`, `.mov`) all share one box structure, so
+#: they share one backend - the walker validates the structure rather than
+#: trusting the extension, which is also what catches a file of some other
+#: type that was renamed.
 _JPEG_BACKEND = _NativeBackend(
     "jpeg",
     jpeg_backend.embed_jpeg,
@@ -36,12 +39,23 @@ _JPEG_BACKEND = _NativeBackend(
     jpeg_backend.strip_jpeg,
     (UnreadableJpegError, JpegPayloadTooLargeError),
 )
+_MP4_BACKEND = _NativeBackend(
+    "mp4",
+    mp4_backend.embed_mp4,
+    mp4_backend.extract_mp4,
+    mp4_backend.strip_mp4,
+    (UnreadableMp4Error, UnsafeMp4EditError),
+)
 _NATIVE_BACKENDS: dict[str, _NativeBackend] = {
     ".png": _NativeBackend(
         "png", png_backend.embed_png, png_backend.extract_png, png_backend.strip_png, (UnreadablePngError,)
     ),
     ".jpg": _JPEG_BACKEND,
     ".jpeg": _JPEG_BACKEND,
+    ".mp4": _MP4_BACKEND,
+    ".m4v": _MP4_BACKEND,
+    ".m4a": _MP4_BACKEND,
+    ".mov": _MP4_BACKEND,
 }
 
 
@@ -64,8 +78,8 @@ def _run(fn, backend: _NativeBackend, *args):
 
 def embed(path: str | Path, provenance: Provenance) -> str:
     """Embed `provenance` into the asset at `path`. Returns which backend
-    was used ("png", "jpeg", or "sidecar"), since callers/CLI output often
-    want to say so explicitly rather than leave it implicit."""
+    was used ("png", "jpeg", "mp4", or "sidecar"), since callers/CLI output
+    often want to say so explicitly rather than leave it implicit."""
     if not Path(path).exists():
         raise FileNotFoundError(f"no such file: {path}")
     backend = _native_backend_for(path)

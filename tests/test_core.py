@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from asset_provenance_toolkit.core import embed, extract, strip
-from asset_provenance_toolkit.schema import Provenance
+from asset_provenance_toolkit.schema import Provenance, ProvenanceError
 from asset_provenance_toolkit.sidecar_backend import sidecar_path
 
 
@@ -148,3 +148,54 @@ def test_extension_matching_is_case_insensitive(tmp_path: Path):
     Image.new("RGB", (4, 4)).save(upper_png)
     backend = embed(upper_png, Provenance(capability="c", provider="p", params={}))
     assert backend == "png"
+
+
+# --------------------------------------------------------------------------
+# ISO base media routing
+# --------------------------------------------------------------------------
+
+
+def test_embed_on_mp4_uses_mp4_backend_not_sidecar(sample_mp4: Path):
+    backend = embed(sample_mp4, Provenance(capability="c", provider="p", params={}))
+    assert backend == "mp4"
+    assert not sidecar_path(sample_mp4).exists()
+
+
+@pytest.mark.parametrize("suffix", [".mp4", ".m4v", ".m4a", ".mov", ".MP4", ".MOV"])
+def test_the_whole_iso_base_media_family_routes_to_one_backend(tmp_path: Path, suffix: str):
+    """One container format, four extensions, and the extension's case is not
+    the file's business - `.MOV` off a camera is the same file as `.mov`."""
+    from conftest import build_mp4
+
+    path = tmp_path / f"clip{suffix}"
+    path.write_bytes(build_mp4(faststart=True))
+    assert embed(path, Provenance(capability="c", provider="p", params={})) == "mp4"
+    assert not sidecar_path(path).exists()
+
+
+def test_a_file_renamed_to_mp4_reports_a_clean_error_not_a_traceback(tmp_path: Path):
+    """The dispatcher promises that a backend's read-phase failure surfaces as
+    a ProvenanceError, which is the only thing the CLI knows how to report."""
+    path = tmp_path / "actually-a-zip.mp4"
+    path.write_bytes(b"PK\x03\x04 this is not a video")
+    with pytest.raises(ProvenanceError):
+        extract(path)
+
+
+def test_extract_falls_back_to_sidecar_for_an_mp4_stripped_elsewhere(sample_mp4: Path):
+    from asset_provenance_toolkit.sidecar_backend import embed_sidecar
+
+    provenance = Provenance(capability="c", provider="p", params={})
+    embed_sidecar(sample_mp4, provenance)
+    assert extract(sample_mp4) == provenance
+
+
+def test_strip_removes_both_the_mp4_box_and_any_sidecar(sample_mp4: Path):
+    from asset_provenance_toolkit.sidecar_backend import embed_sidecar
+
+    embed(sample_mp4, Provenance(capability="c", provider="p", params={}))
+    embed_sidecar(sample_mp4, Provenance(capability="c", provider="p", params={}))
+
+    assert strip(sample_mp4) is True
+    assert extract(sample_mp4) is None
+    assert not sidecar_path(sample_mp4).exists()

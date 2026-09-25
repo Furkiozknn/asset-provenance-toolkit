@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 648" width="1200" height="648" role="img" aria-label="Three backends behind one call: PNG gets an ai-provenance text chunk via Pillow, switching to compressed zTXt past about 2 KB and re-saving without touching pixel data; JPEG gets a private APP1 segment tagged AIPROV1 spliced straight into the marker structure so the image is never re-encoded; everything else gets a sidecar JSON file. Extraction always falls back to the sidecar.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 716" width="1200" height="716" role="img" aria-label="Four backends behind one call: PNG gets an ai-provenance text chunk via Pillow, switching to compressed zTXt past about 2 KB and re-saving without touching pixel data; JPEG gets a private APP1 segment tagged AIPROV1 spliced straight into the marker structure so the image is never re-encoded; MP4, M4V, M4A and MOV get a uuid box appended after the media data, because the chunk offsets in moov are absolute and anything inserted earlier would leave a file that parses but does not decode; everything else gets a sidecar JSON file. Extraction always falls back to the sidecar.">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#0d1117"/>
@@ -14,36 +14,44 @@
       <path d="M0 0 L10 5 L0 10 z" fill="#8b98a9"/>
     </marker>
   </defs>
-  <rect width="1200" height="648" fill="url(#bg)"/>
+  <rect width="1200" height="716" fill="url(#bg)"/>
   <rect x="0" y="0" width="1200" height="4" fill="url(#accent)"/>
-  <text x="40" y="56" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24" font-weight="700" fill="#e6edf3">three backends, one record</text>
+  <text x="40" y="56" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24" font-weight="700" fill="#e6edf3">four backends, one record</text>
   <text x="40" y="84" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" fill="#8b98a9">the file type picks the mechanism - and none of the mechanisms touches a pixel</text>
-    <rect x="40" y="176" width="180" height="62" rx="12" fill="#131a26" stroke="#6cb6ff" stroke-width="1.6"/>
-    <text x="130" y="212" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#6cb6ff">embed(record)</text>
-    <path d="M220 207 L288 146" stroke="#8b98a9" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
-    <rect x="288" y="118" width="190" height="56" rx="12" fill="#131a26" stroke="#3fb950" stroke-width="1.6"/>
-    <text x="383" y="142" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#3fb950">.png</text>
-    <text x="383" y="162" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#8b98a9">native</text>
-    <text x="506" y="138" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">an ai-provenance chunk via Pillow: tEXt, or zTXt</text>
-    <text x="506" y="159" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">once the record passes about 2 KB</text>
-    <text x="506" y="180" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">re-saved from img.copy() after img.load() -</text>
-    <text x="506" y="201" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#5c6b7f">pixel data untouched, other text chunks kept</text>
-    <path d="M220 207 L288 296" stroke="#8b98a9" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
-    <rect x="288" y="268" width="190" height="56" rx="12" fill="#131a26" stroke="#3fb950" stroke-width="1.6"/>
-    <text x="383" y="292" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#3fb950">.jpg / .jpeg</text>
-    <text x="383" y="312" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#8b98a9">native</text>
-    <text x="506" y="288" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">a private APP1 segment tagged AIPROV1\0 - distinct</text>
-    <text x="506" y="309" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">from EXIF's Exif\0\0 and from XMP's URI tag</text>
-    <text x="506" y="330" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">spliced into the marker structure, never decoded:</text>
-    <text x="506" y="351" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#5c6b7f">JPEG re-encoding is lossy, so it edits bytes only</text>
-    <path d="M220 207 L288 446" stroke="#8b98a9" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
-    <rect x="288" y="418" width="190" height="56" rx="12" fill="#131a26" stroke="#f0b429" stroke-width="1.6"/>
-    <text x="383" y="442" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#f0b429">anything else</text>
-    <text x="383" y="462" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#8b98a9">sidecar</text>
-    <text x="506" y="438" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">a &lt;file&gt;.provenance.json written next to the asset</text>
-    <text x="506" y="459" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">video containers land here today - an MP4 atom</text>
-    <text x="506" y="480" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">backend is deliberately left for its own pass</text>
-  <path d="M40 560 L1160 560" stroke="#26324a" stroke-width="1"/>
-    <text x="40" y="592" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#8b98a9">extract() checks the sidecar as a fallback even for PNG and JPEG - a sidecar can legitimately outlive an</text>
-    <text x="40" y="614" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#5c6b7f">embedded record that some other tool stripped along the way.</text>
+  <rect x="40" y="321" width="180" height="62" rx="12" fill="#131a26" stroke="#6cb6ff" stroke-width="1.6"/>
+  <text x="130" y="357" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#6cb6ff">embed(record)</text>
+  <path d="M220 352 L288 146" stroke="#8b98a9" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
+  <rect x="288" y="118" width="190" height="56" rx="12" fill="#131a26" stroke="#3fb950" stroke-width="1.6"/>
+  <text x="383" y="142" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#3fb950">.png</text>
+  <text x="383" y="162" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#8b98a9">native</text>
+  <text x="506" y="138" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">an ai-provenance chunk via Pillow: tEXt, or zTXt</text>
+  <text x="506" y="159" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">once the record passes about 2 KB</text>
+  <text x="506" y="180" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">re-saved from img.copy() after img.load() -</text>
+  <text x="506" y="201" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#5c6b7f">pixel data untouched, other text chunks kept</text>
+  <path d="M220 352 L288 286" stroke="#8b98a9" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
+  <rect x="288" y="258" width="190" height="56" rx="12" fill="#131a26" stroke="#3fb950" stroke-width="1.6"/>
+  <text x="383" y="282" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#3fb950">.jpg / .jpeg</text>
+  <text x="383" y="302" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#8b98a9">native</text>
+  <text x="506" y="278" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">a private APP1 segment tagged AIPROV1\0 - distinct</text>
+  <text x="506" y="299" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">from EXIF's Exif\0\0 and from XMP's URI tag</text>
+  <text x="506" y="320" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">spliced into the marker structure, never decoded:</text>
+  <text x="506" y="341" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#5c6b7f">JPEG re-encoding is lossy, so it edits bytes only</text>
+  <path d="M220 352 L288 426" stroke="#8b98a9" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
+  <rect x="288" y="398" width="190" height="56" rx="12" fill="#131a26" stroke="#3fb950" stroke-width="1.6"/>
+  <text x="383" y="422" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#3fb950">.mp4 .m4v .m4a .mov</text>
+  <text x="383" y="442" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#8b98a9">native</text>
+  <text x="506" y="418" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">a uuid box - the format's own private-data slot, the</text>
+  <text x="506" y="439" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">same one XMP uses - appended AFTER the media data</text>
+  <text x="506" y="460" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#ff8d6b">stco/co64 hold absolute offsets into mdat: insert</text>
+  <text x="506" y="481" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#ff8d6b">earlier and it parses, reports fine, and never decodes</text>
+  <path d="M220 352 L288 566" stroke="#8b98a9" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
+  <rect x="288" y="538" width="190" height="56" rx="12" fill="#131a26" stroke="#f0b429" stroke-width="1.6"/>
+  <text x="383" y="562" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#f0b429">anything else</text>
+  <text x="383" y="582" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#8b98a9">sidecar</text>
+  <text x="506" y="558" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">a &lt;file&gt;.provenance.json written next to the asset</text>
+  <text x="506" y="579" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#8b98a9">WebM is EBML, not ISO base media - it shares nothing</text>
+  <text x="506" y="600" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#5c6b7f">with the MP4 backend and lands here</text>
+  <path d="M40 640 L1160 640" stroke="#26324a" stroke-width="1"/>
+  <text x="40" y="672" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#8b98a9">extract() checks the sidecar as a fallback even for a native format - a sidecar can legitimately outlive an</text>
+  <text x="40" y="694" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#5c6b7f">embedded record that some other tool stripped along the way.</text>
 </svg>

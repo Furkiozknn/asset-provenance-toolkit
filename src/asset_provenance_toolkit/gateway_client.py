@@ -1,9 +1,8 @@
 """Fetch a job record from an ai-job-gateway-compatible server.
 
 No Python dependency on the `ai-job-gateway` package - same ecosystem
-policy as `prompt-template-manager` and `model-comparison-harness`
-(see ADR-006 in the lab's DECISIONS.md): coupling only through the
-documented HTTP contract.
+policy as `prompt-template-manager` and `model-comparison-harness` --
+coupling only through the documented HTTP contract.
 """
 
 from __future__ import annotations

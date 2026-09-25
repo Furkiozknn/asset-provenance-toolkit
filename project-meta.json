@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0.0",
+  "id": "asset-provenance-toolkit",
+  "owner": "Furkiozknn",
+  "repository": "https://github.com/Furkiozknn/asset-provenance-toolkit",
+  "homepage": "https://furkiozknn.github.io/#asset-provenance-toolkit",
+  "releases": "https://github.com/Furkiozknn/asset-provenance-toolkit/releases",
+  "status": "active",
+  "category": "developer-tool",
+  "platform": [
+    "cli",
+    "library"
+  ],
+  "primary_language": "Python",
+  "technologies": [
+    "Python 3.11+",
+    "PNG text chunks",
+    "JPEG APP1 markers",
+    "ISO base media uuid boxes",
+    "ffmpeg (verification only)"
+  ],
+  "version": "0.1.0",
+  "license": "MIT",
+  "topics": [
+    "ai-transparency",
+    "audit-trail",
+    "c2pa",
+    "cli",
+    "content-authenticity",
+    "exif",
+    "ffmpeg",
+    "generative-ai",
+    "image-metadata",
+    "metadata",
+    "mp4",
+    "provenance",
+    "python",
+    "video"
+  ],
+  "summary": "Which model, provider, params and job made this file - written into the file itself, so the record outlives the database row. PNG gets a lossless text chunk, JPEG a private APP1 marker spliced into container bytes with no re-encoding, MP4/MOV a uuid box appended after the media data so the absolute chunk offsets in moov stay valid, everything else a sidecar. Honest about what C2PA does that this does not. 125 tests.",
+  "key_features": [
+    "Which model, provider, parameters and job made this file - written into the file itself, so the record outlives the database row",
+    "PNG gets a lossless text chunk; JPEG gets a private APP1 marker spliced into container bytes with no re-encoding",
+    "MP4/M4V/M4A/MOV get a uuid box appended after the media data - nothing stco/co64 points at ever moves, and any edit that would move it is refused",
+    "Verified against real ffmpeg-encoded clips by comparing decoded output, not just file structure",
+    "Anything else gets a sidecar file rather than a silent failure",
+    "Honest about what C2PA does that this does not"
+  ],
+  "media": {
+    "hero": "assets/banner.svg",
+    "screenshots": [],
+    "gifs": [
+      "assets/demo.gif"
+    ],
+    "videos": []
+  },
+  "tests": {
+    "count": 125,
+    "source": "`125 passed`",
+    "measured": "2026-09-22"
+  },
+  "ci": {
+    "workflows": [
+      "ci.yml",
+      "yayinla.yml"
+    ],
+    "badge": "https://github.com/Furkiozknn/asset-provenance-toolkit/actions/workflows/ci.yml/badge.svg"
+  },
+  "docs": {
+    "readme": "README.md",
+    "changelog": null,
+    "version_history": null,
+    "roadmap": null,
+    "security": "SECURITY.md",
+    "contributing": "CONTRIBUTING.md",
+    "license_file": "LICENSE"
+  },
+  "social": {
+    "headline": "Provenance that lives in the file, not in a database row you will lose.",
+    "hashtags": [
+      "provenance",
+      "c2pa",
+      "aitransparency",
+      "python"
+    ],
+    "primary_link": "https://github.com/Furkiozknn/asset-provenance-toolkit"
+  },
+  "provenance": {
+    "generated_at": "2026-09-22",
+    "generator": "schema/uret.py",
+    "rule": "mechanical fields read from the repository and the GitHub API; editorial fields hand-written and reviewed; no field is generated from a guess"
+  }
+}

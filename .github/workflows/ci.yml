@@ -14,14 +14,45 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The three versions pyproject.toml claims in its classifiers. A
+        # claim nothing checks is a claim, not a fact.
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: uv sync --group dev
 
       - name: Run tests
         run: uv run pytest -v
+
+  gercek-video:
+    # The suite builds its ISO base media files by hand, which is how the
+    # chunk-offset assertions can be exact - but a hand-built file is not
+    # what the tool gets pointed at. This job encodes real clips and asks a
+    # decoder, not a parser, whether the media survived. It also runs the
+    # negative control, so a green tick here means the check still bites.
+    name: Real encoded media
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Embed into real clips and compare decoded output
+        run: uv run python arac/gercek-video-dogrula.py
