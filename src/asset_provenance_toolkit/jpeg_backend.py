@@ -24,6 +24,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+from ._atomic import write_atomic
 from .schema import Provenance
 
 _SOI = b"\xff\xd8"
@@ -138,7 +139,7 @@ def embed_jpeg(path: str | Path, provenance: Provenance) -> None:
     scan/pixel data - is preserved exactly."""
     data = Path(path).read_bytes()
     new_data = _rebuild(data, path, new_segment=_our_segment(provenance))
-    Path(path).write_bytes(new_data)
+    write_atomic(path, new_data)
 
 
 def extract_jpeg(path: str | Path) -> Optional[Provenance]:
@@ -146,8 +147,7 @@ def extract_jpeg(path: str | Path) -> Optional[Provenance]:
     segments, _ = _read_segments(data, path)
     for marker, raw in segments:
         if _is_ours(marker, raw):
-            raw_json = raw[4 + len(_IDENTIFIER) :].decode("utf-8")
-            return Provenance.from_json(raw_json)
+            return Provenance.from_json(raw[4 + len(_IDENTIFIER) :])
     return None
 
 
@@ -159,5 +159,5 @@ def strip_jpeg(path: str | Path) -> bool:
     if not any(_is_ours(m, r) for m, r in segments):
         return False
     new_data = _rebuild(data, path, new_segment=None)
-    Path(path).write_bytes(new_data)
+    write_atomic(path, new_data)
     return True

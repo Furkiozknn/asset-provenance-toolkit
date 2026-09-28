@@ -17,12 +17,12 @@ already does with its APP1 segment.
 
 from __future__ import annotations
 
-import os
 import struct
 import zlib
 from pathlib import Path
 from typing import Iterator, List, Optional, Tuple
 
+from ._atomic import write_atomic
 from .schema import Provenance
 
 #: PNG tEXt/zTXt/iTXt keyword this tool reads/writes. Keywords are
@@ -161,23 +161,6 @@ def _provenance_chunk(text: str) -> bytes:
     return _encode_chunk(b"tEXt", keyword + b"\x00" + latin)
 
 
-def _write_atomic(path: Path, payload: bytes) -> None:
-    """Write next to the target and rename into place, so a failure mid-write
-    (disk full, permission denied on the directory) never leaves a truncated
-    PNG where a complete one used to be."""
-    tmp = path.with_name(f".{path.name}.aprov-tmp")
-    try:
-        with open(tmp, "wb") as fh:
-            fh.write(payload)
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
-
-
 def _rebuild(raw: bytes, chunks: List[Tuple[bytes, bytes]], insert: Optional[bytes]) -> bytes:
     """The file with this tool's chunk(s) removed and ``insert`` (if any) placed
     just before IEND. Every other chunk is re-emitted from its original bytes."""
@@ -202,7 +185,7 @@ def embed_png(path: str | Path, provenance: Provenance) -> None:
     """
     path = Path(path)
     raw, chunks = _read_chunks(path)
-    _write_atomic(path, _rebuild(raw, chunks, _provenance_chunk(provenance.to_json())))
+    write_atomic(path, _rebuild(raw, chunks, _provenance_chunk(provenance.to_json())))
 
 
 def extract_png(path: str | Path) -> Optional[Provenance]:
@@ -220,5 +203,5 @@ def strip_png(path: str | Path) -> bool:
     raw, chunks = _read_chunks(path)
     if not any(_chunk_keyword(ctype, data) == PROVENANCE_KEY for ctype, data in chunks):
         return False
-    _write_atomic(path, _rebuild(raw, chunks, None))
+    write_atomic(path, _rebuild(raw, chunks, None))
     return True
