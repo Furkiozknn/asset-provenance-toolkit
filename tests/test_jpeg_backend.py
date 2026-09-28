@@ -87,13 +87,13 @@ def test_strip_preserves_other_app_segments(sample_jpg: Path):
 
 def test_decoded_pixels_unaffected_by_embed_and_strip(sample_jpg: Path):
     with Image.open(sample_jpg) as before:
-        before_pixels = list(before.convert("RGB").getdata())
+        before_pixels = before.convert("RGB").tobytes()
 
     embed_jpeg(sample_jpg, Provenance(capability="c", provider="p", params={}))
     strip_jpeg(sample_jpg)
 
     with Image.open(sample_jpg) as after:
-        after_pixels = list(after.convert("RGB").getdata())
+        after_pixels = after.convert("RGB").tobytes()
     assert before_pixels == after_pixels
 
 
