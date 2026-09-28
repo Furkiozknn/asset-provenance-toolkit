@@ -2,6 +2,9 @@
 
 # asset-provenance-toolkit
 
+<p align="center"><img src="docs/reel/reel.gif" alt="asset-provenance-toolkit - 15-second motion reel" width="720"></p>
+<p align="center"><sub><a href="docs/reel/reel.mp4">MP4 version with sound</a></sub></p>
+
 Embed and extract generation provenance — capability, provider, params, job id — directly in the files an AI pipeline produces, so the record travels with the asset instead of living only in a database row. A provider-agnostic generalization of the classic "drag the PNG back into the UI to see its generation parameters" pattern (AUTOMATIC1111, ComfyUI), applicable to any file and any generation backend.
 
 ![aprov embedding provenance into a PNG and reading it back: capability, provider, params and schema version come straight out of the file](assets/demo.gif)

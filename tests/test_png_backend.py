@@ -22,12 +22,12 @@ def test_embed_then_extract_roundtrips(sample_png: Path):
 
 def test_embed_is_lossless_for_pixel_data(sample_png: Path):
     with Image.open(sample_png) as before:
-        before_pixels = list(before.convert("RGB").getdata())
+        before_pixels = before.convert("RGB").tobytes()
 
     embed_png(sample_png, Provenance(capability="c", provider="p", params={}))
 
     with Image.open(sample_png) as after:
-        after_pixels = list(after.convert("RGB").getdata())
+        after_pixels = after.convert("RGB").tobytes()
     assert before_pixels == after_pixels
 
 
