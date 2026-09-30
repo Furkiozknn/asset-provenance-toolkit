@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 from ._atomic import write_atomic
-from .schema import Provenance
+from .schema import Provenance, ProvenanceError
 
 
 def sidecar_path(path: str | Path) -> Path:
@@ -30,7 +30,12 @@ def extract_sidecar(path: str | Path) -> Optional[Provenance]:
     sidecar = sidecar_path(path)
     if not sidecar.exists():
         return None
-    return Provenance.from_json(sidecar.read_bytes())
+    try:
+        return Provenance.from_json(sidecar.read_bytes())
+    except ProvenanceError as exc:
+        # Name the file: the user ran the command on the asset, and the
+        # broken record is the .provenance.json next to it.
+        raise ProvenanceError(f"{sidecar}: {exc}") from exc
 
 
 def strip_sidecar(path: str | Path) -> bool:

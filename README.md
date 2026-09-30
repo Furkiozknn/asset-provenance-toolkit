@@ -2,20 +2,35 @@
 
 # asset-provenance-toolkit
 
-<p align="center"><img src="docs/reel/reel.gif" alt="asset-provenance-toolkit - 15-second motion reel" width="720"></p>
-<p align="center"><sub><a href="docs/reel/reel.mp4">MP4 version with sound</a></sub></p>
+**Write which model, provider and parameters made a file into the file itself, and read it back later.** PNG, JPEG and MP4/MOV carry the record inside; anything else gets a `.provenance.json` beside it. No database in the loop.
 
-Embed and extract generation provenance — capability, provider, params, job id — directly in the files an AI pipeline produces, so the record travels with the asset instead of living only in a database row. A provider-agnostic generalization of the classic "drag the PNG back into the UI to see its generation parameters" pattern (AUTOMATIC1111, ComfyUI), applicable to any file and any generation backend.
+```bash
+uv tool install git+https://github.com/Furkiozknn/asset-provenance-toolkit
+aprov embed cover.png --capability image-generate --provider flux-2 --params '{"prompt": "a red sneaker"}'
+aprov extract cover.png
+```
 
-![aprov embedding provenance into a PNG and reading it back: capability, provider, params and schema version come straight out of the file](assets/demo.gif)
+Needs Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/); any PNG, JPEG, MP4/MOV or other file works in place of `cover.png`. Nothing to install first? `uvx --from git+https://github.com/Furkiozknn/asset-provenance-toolkit aprov --help` runs it once. Not on PyPI yet.
 
-<sub>Real output. The PNG is written, the provenance is embedded into it, and <code>aprov extract</code> reads it back out of the same file — no database in the loop.</sub>
+Install time, measured on a clean machine state (empty uv cache, Windows 11, uv 0.12.5, 30 Sep 2026; [`docs/demo/kurulum.txt`](docs/demo/kurulum.txt)): `uv tool install` 8.8 s, `uvx` 13.1 s cold and 2.4 s warm, `python -m venv` + `pip install` 7.3 s + 12.3 s. GitHub and the cache decide the rest.
+
+![aprov annotating a sound effect and a screenshot of the game kanca, reading the record back, then stripping it: about 24 seconds of real terminal output](docs/demo/demo.gif)
+
+<sub>Real output, 24 s. Two real assets of the game [kanca](https://github.com/Furkiozknn/kanca) (`kanca_at.wav`, `bolum_01.png`; copies) are annotated, read back and stripped; the sound's parameters are its actual recipe row (`tools/ses_uret.gd`). Nothing on screen is typed by hand: <a href="scripts/demo-uret.py"><code>scripts/demo-uret.py</code></a> runs the commands and <a href="docs/demo/komutlar.txt"><code>docs/demo/komutlar.txt</code></a> is the record. <a href="docs/demo/demo.mp4">MP4</a>.</sub>
+
+## When to use it, when not
+
+| Use it when | Do not use it when |
+|---|---|
+| You want to know, weeks later and without a database lookup, which model and settings produced a file. | You need proof of origin for someone else. The record is not signed; anyone with file access can edit or strip it. Use a C2PA SDK ([details](#relationship-to-c2pa--content-credentials)). |
+| The asset leaves your system as a single file: an image, a clip, a game's sound effect. | The asset is WebM/Matroska: no native backend yet, it falls back to the sidecar. |
+| A pipeline's output step should stamp its files (`aprov verify` exits 0 or 1, `--json` for scripts). | You need to process a folder in one call: one file per invocation, loop in your shell. |
 
 Part of the same small ecosystem as [`ai-job-gateway`](https://github.com/Furkiozknn/ai-job-gateway), [`prompt-template-manager`](https://github.com/Furkiozknn/prompt-template-manager), and [`model-comparison-harness`](https://github.com/Furkiozknn/model-comparison-harness) — coupled only through documented HTTP contracts, never through a shared Python dependency.
 
 ## Why
 
-A generated image or video is only as reproducible as the metadata that survives alongside it. Once a file leaves the system that made it — downloaded, shared, archived — there's usually no way to know what produced it: which model, which provider, which parameters, which prompt. `ai-job-gateway`'s job records answer that question, but only for as long as the job hasn't expired out of the store (`result_expires_at`, see ADR-005). This tool makes provenance an attribute of the *file itself*, so it survives independently of any database or job store's retention window.
+A generated image or video is only as reproducible as the metadata that survives alongside it. Once a file leaves the system that made it — downloaded, shared, archived — there's usually no way to know what produced it: which model, which provider, which parameters, which prompt. `ai-job-gateway`'s job records answer that question, but only for as long as the job hasn't expired out of the store (`result_expires_at`, see ADR-005). This tool makes provenance an attribute of the *file itself*, so it survives independently of any database or job store's retention window. A provider-agnostic generalization of the classic "drag the PNG back into the UI to see its generation parameters" pattern (AUTOMATIC1111, ComfyUI).
 
 ## What it does
 
@@ -25,48 +40,39 @@ A generated image or video is only as reproducible as the metadata that survives
 - **Strip** it, when you want to publish a file without its generation history attached.
 - **`from-job`**: fetch a finished job directly from a running `ai-job-gateway`-compatible server and embed its record in one step.
 
-## Quickstart
+## When something is wrong
 
-Needs Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/). Not on PyPI yet, so it runs from a clone:
-
-```bash
-git clone https://github.com/Furkiozknn/asset-provenance-toolkit.git
-cd asset-provenance-toolkit
-uv sync
-
-# Any PNG, JPEG, MP4/MOV or other file works. This makes a small test image:
-uv run python -c "from PIL import Image; Image.new('RGB', (64, 64), 'red').save('cat.png')"
-
-uv run aprov embed cat.png --capability image-generate --provider flux-2 \
-    --params '{"prompt": "a red sneaker on a white background", "seed": 42}'
-# embedded provenance into cat.png (png backend)
-
-uv run aprov extract cat.png --compact
-# {"capability":"image-generate","created_at":"2026-09-25T09:50:00.000000+00:00", ...}
-
-uv run aprov verify cat.png
-# OK: cat.png has provenance (capability='image-generate', provider='flux-2', ...)
-```
-
-`cat.png` now carries its own generation history. Copy it, rename it, send it to someone else — `aprov extract cat.png` still works, with no database or job id lookup involved.
-
-To have a plain `aprov` command on your `PATH` (as in the examples below) instead of `uv run aprov`, install it as a tool:
-
-```bash
-uv tool install git+https://github.com/Furkiozknn/asset-provenance-toolkit
-aprov --version
-```
-
-When something is wrong, the CLI says so and exits 1, without a Python traceback:
+The CLI says what and exits 1 (or 2 for a mistyped command line), without a Python traceback. Real output:
 
 ```text
 $ aprov verify plain.png
 FAIL: no provenance found for plain.png
 $ aprov extract broken.jpg
 error: broken.jpg: not a readable JPEG file (missing SOI marker)
-$ aprov from-job cat.png --gateway-url http://localhost:9 --job-id abc
-error: could not fetch job 'abc' from http://localhost:9: ConnectError: [Errno 111] Connection refused
+$ aprov embed renders --capability c --provider p
+error: renders is a directory, not a file - aprov works on one file at a time (for a folder, loop over its files in your shell)
+$ aprov embed cover.png    # (the usage lines above this are left out here)
+aprov embed: error: the following arguments are required: --capability, --provider
+hint: a file plus two required options: aprov embed cat.png --capability image-generate --provider flux-2
+$ aprov from-job cover.png --gateway-url localhost:8000 --job-id abc
+error: --gateway-url must start with http:// or https:// (got 'localhost:8000')
 ```
+
+Exit codes: `0` done or found, `1` no record / unreadable file / bad JSON / gateway unreachable, `2` wrong command line. `aprov --help` and `aprov <command> --help` show an example each.
+
+## Working from a clone
+
+```bash
+git clone https://github.com/Furkiozknn/asset-provenance-toolkit.git
+cd asset-provenance-toolkit
+uv sync
+uv run python -c "from PIL import Image; Image.new('RGB', (64, 64), 'red').save('cat.png')"
+uv run aprov embed cat.png --capability image-generate --provider flux-2 \
+    --params '{"prompt": "a red sneaker on a white background", "seed": 42}'
+uv run aprov verify cat.png
+```
+
+`cat.png` now carries its own generation history. Copy it, rename it, send it to someone else — `aprov extract cat.png` still works, with no database or job id lookup involved.
 
 ## Backends
 
@@ -178,7 +184,7 @@ uv sync --group dev
 uv run pytest -v
 ```
 
-164 tests, no network and no external binaries — the MP4 fixtures are ISO base media files the suite builds itself, which is what lets the chunk-offset assertions name an exact byte.
+196 tests (187 run on Windows; the 9 that need POSIX permission bits and symlinks skip there), no network and no external binaries — the MP4 fixtures are ISO base media files the suite builds itself, which is what lets the chunk-offset assertions name an exact byte.
 
 There is one check that deliberately does need a binary, and it is the one worth running before trusting the video path:
 

@@ -55,6 +55,10 @@ def write_atomic_with(path: str | Path, write: Callable[[BinaryIO], None]) -> No
         os.replace(tmp, target)
     except BaseException:
         try:
+            # copymode may have made the temp file read-only (a read-only
+            # asset); Windows refuses to unlink such a file, which used to
+            # leave `.name.xxxx.aprov-tmp` behind after the failed write.
+            os.chmod(tmp, 0o600)
             os.unlink(tmp)
         except OSError:
             pass

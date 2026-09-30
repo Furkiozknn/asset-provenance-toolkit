@@ -3,6 +3,21 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 The version is the one in `pyproject.toml`; a release is the git tag `v<version>` on the commit that carries it.
 
+## [Unreleased]
+
+### Fixed
+- `embed`/`extract`/`verify`/`strip` on a directory now fail with `error: ... is a directory, not a file`. Before, `embed` wrote a `<dir>.provenance.json` next to it and `verify` then reported OK.
+- A failed write to a read-only file (Windows) no longer leaves a `.name.xxxx.aprov-tmp` file behind and no longer prints the raw `[WinError 5] ... -> ...`; it says `permission denied - is it read-only ...`.
+- A broken `<file>.provenance.json` is named in the error.
+
+### Changed
+- `aprov --help` and every subcommand's `--help` explain what the tool does, carry an example, describe each option and list the exit codes. A wrong command line still exits 2 and now adds a `hint:` line with the command to type.
+- `--capability` / `--provider` must not be empty (exit 2). `--gateway-url` must start with `http://` or `https://`, checked before any request. `embed` on a sidecar file names the sidecar.
+- README: one-sentence definition, one-command install with measured times, a real terminal demo (`scripts/demo-uret.py`), when to use / not. The old reel and `assets/demo.gif` (no generator in the repository) are gone.
+
+### Added
+- `tests/test_ilk_kullanim.py` (32 tests), including one that checks every `aprov` command in the README against the real option list.
+
 ## [0.1.0] - 2026-09-25
 
 First release. Prepared for PyPI; not yet tagged or published.

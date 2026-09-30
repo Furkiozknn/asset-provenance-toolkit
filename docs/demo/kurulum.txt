@@ -1,0 +1,9 @@
+# temiz kurulum sureleri: main 0e187b2, bos uv onbellegi / bos venv, Windows 11, uv 0.12.5, Python 3.12
+# komut: git+https://github.com/Furkiozknn/asset-provenance-toolkit  (tarih: 2026-09-30, kanit/asset-provenance-toolkit/once/kurulum.txt)
+uvx cold (bos uv onbellegi): 13.1 s, cikis 0, 'aprov 0.1.0'
+uvx warm: 2.4 s, cikis 0, 'aprov 0.1.0'
+uv tool install (izole, bos onbellek): 8.8 s, cikis 0, ''
+aprov --version (kurulu): 0.9 s, cikis 0, 'aprov 0.1.0'
+python -m venv: 7.3 s, cikis 0, ''
+pip install git+: 12.3 s, cikis 0, ''
+aprov --version (venv): 0.6 s, cikis 0, 'aprov 0.1.0'
