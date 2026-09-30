@@ -56,7 +56,7 @@
   },
   "tests": {
     "count": 196,
-    "source": "`187 passed, 9 skipped` (Windows; 9 need POSIX permissions)",
+    "source": "`196 passed`",
     "measured": "2026-09-30"
   },
   "ci": {

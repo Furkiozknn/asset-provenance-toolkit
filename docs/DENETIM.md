@@ -51,7 +51,7 @@ Sayılar: "164 tests" → koşudan 155 geçti + 9 atlandı = 164 (uyuştu; 9 tes
 
 ## Testler ve CI
 
-Önce: 155 geçti, 9 atlandı, 2,8 s. CI: `ci.yml` (3 sürüm matrisi 3.11-3.13, `paket`, `gercek-video`) ve `yayinla.yml`. Sonra: bkz. `TASARIM.md` sonu ve PR.
+Önce: 155 geçti, 9 atlandı, 2,8 s (Windows). CI: `ci.yml` (3 sürüm matrisi 3.11-3.13, `paket`, `gercek-video`) ve `yayinla.yml`. Sonra: Windows'ta 187 geçti + 9 atlandı; PR #19'daki CI (Linux, 3.11/3.12/3.13) her sürümde `196 passed`, `paket`, `gercek-video` ve CodeQL yeşil. Dal sürümünün kurulumu (`@yenileme/arayuz`) aynı yöntemle ölçüldü: `uvx` 11,6 s / 3,1 s, `uv tool install` 11,1 s (`kanit/.../sonra/kurulum.txt`); fark ağ değişkenliği, ek bağımlılık yok.
 
 ## Günlük "Ekosistem denetimi" (#19, profil deposu)
 
