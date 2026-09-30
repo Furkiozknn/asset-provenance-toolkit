@@ -1,0 +1,61 @@
+# aprov terminal demo: real commands, real output
+# tarih: 2026-09-30T05:52:30+03:00
+# surum: 0.1.0 (pip install . ile kuruldu, PATH'teki aprov)
+# dosyalar: kanca deposundan iki gercek varligin kopyasi (assets/audio/kanca_at.wav, docs/ekran/bolum_01.png) @ 873e573 2026-09-30
+# her komut bash -c 'set -o pipefail; ...' ile bos bir klasorde kosuldu; hicbir satir elle yazilmadi
+
+$ aprov --version
+aprov 0.1.0
+[cikis kodu 0] (0.66 s)
+
+$ ls
+bolum_01.png
+kanca_at.wav
+[cikis kodu 0] (0.07 s)
+
+$ aprov embed kanca_at.wav --capability sfx-generate --provider rfxgen --params '{"preset": "laser", "pitch": 1.45, "gain": 0.55, "max_seconds": 0.22}'
+embedded provenance into kanca_at.wav (sidecar backend: kanca_at.wav.provenance.json)
+[cikis kodu 0] (0.65 s)
+
+$ aprov embed bolum_01.png --capability screenshot --provider godot-4.7 --params '{"scene": "bolum_01"}'
+embedded provenance into bolum_01.png (png backend)
+[cikis kodu 0] (0.60 s)
+
+$ ls
+bolum_01.png
+kanca_at.wav
+kanca_at.wav.provenance.json
+[cikis kodu 0] (0.08 s)
+
+$ aprov extract kanca_at.wav
+{
+  "capability": "sfx-generate",
+  "created_at": "2026-09-30T02:52:27.406772+00:00",
+  "extra": {},
+  "job_id": null,
+  "params": {
+    "gain": 0.55,
+    "max_seconds": 0.22,
+    "pitch": 1.45,
+    "preset": "laser"
+  },
+  "provider": "rfxgen",
+  "result": null,
+  "schema_version": 1,
+  "source": "manual",
+  "source_url": null
+}
+[cikis kodu 0] (0.60 s)
+
+$ aprov verify bolum_01.png
+OK: bolum_01.png has provenance (capability='screenshot', provider='godot-4.7', source='manual', created_at=2026-09-30T02:52:28.018363+00:00)
+[cikis kodu 0] (0.58 s)
+
+$ aprov strip bolum_01.png
+removed provenance from bolum_01.png
+[cikis kodu 0] (0.58 s)
+
+$ aprov verify bolum_01.png; echo "exit code $?"
+FAIL: no provenance found for bolum_01.png
+exit code 1
+[cikis kodu 0] (0.64 s)

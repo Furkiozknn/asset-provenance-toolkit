@@ -37,7 +37,7 @@
     "python",
     "video"
   ],
-  "summary": "Which model, provider, params and job made this file - written into the file itself, so the record outlives the database row. PNG gets a lossless text chunk, JPEG a private APP1 marker spliced into container bytes with no re-encoding, MP4/MOV a uuid box appended after the media data so the absolute chunk offsets in moov stay valid, everything else a sidecar. Honest about what C2PA does that this does not. 164 tests.",
+  "summary": "Which model, provider, params and job made this file - written into the file itself, so the record outlives the database row. PNG gets a lossless text chunk, JPEG a private APP1 marker spliced into container bytes with no re-encoding, MP4/MOV a uuid box appended after the media data so the absolute chunk offsets in moov stay valid, everything else a sidecar. Honest about what C2PA does that this does not. 196 tests.",
   "key_features": [
     "Which model, provider, parameters and job made this file - written into the file itself, so the record outlives the database row",
     "PNG gets a lossless text chunk; JPEG gets a private APP1 marker spliced into container bytes with no re-encoding",
@@ -50,14 +50,14 @@
     "hero": "assets/banner.svg",
     "screenshots": [],
     "gifs": [
-      "assets/demo.gif"
+      "docs/demo/demo.gif"
     ],
     "videos": []
   },
   "tests": {
-    "count": 164,
-    "source": "`164 passed`",
-    "measured": "2026-09-25"
+    "count": 196,
+    "source": "`187 passed, 9 skipped` (Windows; 9 need POSIX permissions)",
+    "measured": "2026-09-30"
   },
   "ci": {
     "workflows": [

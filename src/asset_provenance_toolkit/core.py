@@ -63,6 +63,21 @@ def _native_backend_for(path: str | Path) -> Optional[_NativeBackend]:
     return _NATIVE_BACKENDS.get(Path(path).suffix.lower())
 
 
+def _require_file(path: str | Path) -> None:
+    """One check for every entry point. A directory used to pass `exists()`
+    and get a `<dir>.provenance.json` sidecar - and `verify` then reported OK
+    for it. Both errors are OSError subclasses, which the CLI already reports
+    as `error: ...`."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"no such file: {path}")
+    if p.is_dir():
+        raise IsADirectoryError(
+            f"{path} is a directory, not a file - aprov works on one file at a time "
+            "(for a folder, loop over its files in your shell)"
+        )
+
+
 def _run(fn, backend: _NativeBackend, *args):
     """Run a backend read/write function, turning its read-phase-only error
     (wrong file renamed to this extension, truncated/corrupt download, ...)
@@ -80,8 +95,7 @@ def embed(path: str | Path, provenance: Provenance) -> str:
     """Embed `provenance` into the asset at `path`. Returns which backend
     was used ("png", "jpeg", "mp4", or "sidecar"), since callers/CLI output
     often want to say so explicitly rather than leave it implicit."""
-    if not Path(path).exists():
-        raise FileNotFoundError(f"no such file: {path}")
+    _require_file(path)
     backend = _native_backend_for(path)
     if backend is not None:
         _run(backend.embed, backend, path, provenance)
@@ -96,8 +110,7 @@ def extract(path: str | Path) -> Optional[Provenance]:
     file - a sidecar can legitimately exist even next to an image whose
     embedded record was stripped by some other tool along the way, and
     checking costs nothing."""
-    if not Path(path).exists():
-        raise FileNotFoundError(f"no such file: {path}")
+    _require_file(path)
     backend = _native_backend_for(path)
     if backend is not None:
         found = _run(backend.extract, backend, path)
@@ -109,8 +122,7 @@ def extract(path: str | Path) -> Optional[Provenance]:
 def strip(path: str | Path) -> bool:
     """Remove provenance from `path`, in whichever backend(s) it's present.
     Returns True if anything was actually removed."""
-    if not Path(path).exists():
-        raise FileNotFoundError(f"no such file: {path}")
+    _require_file(path)
     removed = False
     backend = _native_backend_for(path)
     if backend is not None:
