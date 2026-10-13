@@ -37,7 +37,7 @@
     "python",
     "video"
   ],
-  "summary": "Which model, provider, params and job made this file - written into the file itself, so the record outlives the database row. PNG gets a lossless text chunk, JPEG a private APP1 marker spliced into container bytes with no re-encoding, MP4/MOV a uuid box appended after the media data so the absolute chunk offsets in moov stay valid, everything else a sidecar. Honest about what C2PA does that this does not. 196 tests.",
+  "summary": "Writes which model, provider and parameters made a file into the file itself - PNG text chunks, JPEG APP1, MP4/MOV uuid boxes, no re-encoding - or a sidecar for anything else. CLI: aprov.",
   "key_features": [
     "Which model, provider, parameters and job made this file - written into the file itself, so the record outlives the database row",
     "PNG gets a lossless text chunk; JPEG gets a private APP1 marker spliced into container bytes with no re-encoding",
