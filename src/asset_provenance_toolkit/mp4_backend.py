@@ -46,6 +46,7 @@ Two details fall out of that rule:
 
 from __future__ import annotations
 
+import hashlib
 import os
 import uuid as _uuid
 from dataclasses import dataclass
@@ -317,6 +318,31 @@ def extract_mp4(path: str | Path) -> Optional[Provenance]:
                     )
                 return Provenance.from_json(read_at(start, box.end - start))
     return None
+
+
+class _HashSink:
+    """A write-only file object that feeds a hash, so the digest streams
+    through the same piece plan the rewrite uses."""
+
+    def __init__(self) -> None:
+        self.hash = hashlib.sha256()
+
+    def write(self, data: bytes) -> int:
+        self.hash.update(data)
+        return len(data)
+
+
+def content_digest_mp4(path: str | Path) -> str:
+    """SHA-256 hex of the file exactly as ``strip_mp4`` would leave it,
+    streamed in the same 1 MiB pieces, so memory stays flat for any size.
+    ``embed_mp4`` only adds its box (and closes a size-0 final box, which
+    this plan does too), so the digest is the same before and after."""
+    sink = _HashSink()
+    with open(path, "rb") as src:
+        total = os.fstat(src.fileno()).st_size
+        pieces = _plan(_file_reader(src), total, path, new_box=None)
+        _write_pieces(src, pieces, sink)  # type: ignore[arg-type]
+    return sink.hash.hexdigest()
 
 
 def strip_mp4(path: str | Path) -> bool:

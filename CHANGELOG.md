@@ -5,6 +5,9 @@ The version is the one in `pyproject.toml`; a release is the git tag `v<version>
 
 ## [Unreleased]
 
+### Added
+- Content hash. `aprov embed` and `from-job` record `content_hash`, a SHA-256 of the file's content with the record itself left out (the bytes `strip` would leave). `aprov verify` recomputes it and exits 1 with `content CHANGED` when the file was edited, re-encoded or swapped after the record was written. `--no-content-hash` skips it; `verify --require-content-hash` also fails a record without one; `verify --json` gains a `content` object. The field is optional and additive within `schema_version: 1`. Library: `content_digest()`, `check_content()`, `embed(..., bind_content=True)`; the library's `embed` does not hash unless asked.
+
 ### Fixed
 - `embed`/`extract`/`verify`/`strip` on a directory now fail with `error: ... is a directory, not a file`. Before, `embed` wrote a `<dir>.provenance.json` next to it and `verify` then reported OK.
 - A failed write to a read-only file (Windows) no longer leaves a `.name.xxxx.aprov-tmp` file behind and no longer prints the raw `[WinError 5] ... -> ...`; it says `permission denied - is it read-only ...`.

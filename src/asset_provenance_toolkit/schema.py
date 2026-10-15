@@ -37,6 +37,7 @@ _FIELD_TYPES: tuple[tuple[str, tuple[type, ...], bool], ...] = (
     ("source_url", (str,), True),
     ("created_at", (str,), True),
     ("extra", (dict,), False),
+    ("content_hash", (str,), True),
 )
 
 
@@ -52,6 +53,12 @@ class Provenance:
     created_at: Optional[str] = None
     result: Optional[dict[str, Any]] = None
     extra: dict[str, Any] = field(default_factory=dict)
+    #: ``"sha256:<hex>"`` of the file's content with this record left out
+    #: (see ``core.content_digest``), so ``verify`` can tell whether the file
+    #: changed after the record was written. Optional and additive: a v1
+    #: reader that predates it ignores the key, and a record without it
+    #: still reads, so the schema version does not change.
+    content_hash: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.created_at is None:
