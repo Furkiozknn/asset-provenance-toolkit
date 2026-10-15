@@ -30,7 +30,7 @@ Part of the same small ecosystem as [`ai-job-gateway`](https://github.com/Furkio
 
 ## Why
 
-A generated image or video is only as reproducible as the metadata that survives alongside it. Once a file leaves the system that made it — downloaded, shared, archived — there's usually no way to know what produced it: which model, which provider, which parameters, which prompt. `ai-job-gateway`'s job records answer that question, but only for as long as the job hasn't expired out of the store (`result_expires_at`, see ADR-005). This tool makes provenance an attribute of the *file itself*, so it survives independently of any database or job store's retention window. A provider-agnostic generalization of the classic "drag the PNG back into the UI to see its generation parameters" pattern (AUTOMATIC1111, ComfyUI).
+A generated image or video is only as reproducible as the metadata that survives alongside it. Once a file leaves the system that made it — downloaded, shared, archived — there's usually no way to know what produced it: which model, which provider, which parameters, which prompt. `ai-job-gateway`'s job records answer that question, but only for as long as the job hasn't expired out of the store (`result_expires_at`, 30 minutes after the job finishes by default; see the gateway's [contract](https://github.com/Furkiozknn/ai-job-gateway#why-this-contract)). This tool makes provenance an attribute of the *file itself*, so it survives independently of any database or job store's retention window. A provider-agnostic generalization of the classic "drag the PNG back into the UI to see its generation parameters" pattern (AUTOMATIC1111, ComfyUI).
 
 ## What it does
 
