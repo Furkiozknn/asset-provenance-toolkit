@@ -39,6 +39,7 @@ A generated image or video is only as reproducible as the metadata that survives
 - **Verify** whether a file has provenance, with a scriptable exit code (or `--json` for machine-readable output).
 - **Strip** it, when you want to publish a file without its generation history attached.
 - **`from-job`**: fetch a finished job directly from a running `ai-job-gateway`-compatible server and embed its record in one step.
+- **`c2pa-manifest`**: turn the record into a C2PA manifest definition, so `c2patool` or c2pa-python can sign it as a Content Credential ([details](#promoting-a-record-to-a-content-credential-aprov-c2pa-manifest)).
 
 ## When something is wrong
 
@@ -103,6 +104,62 @@ WebM/Matroska is a genuinely different container (EBML, not ISO base media) and 
 
 What this toolkit gives you is the same *idea* a C2PA assertion captures (what tool, what parameters, what job produced this asset) in the same *place* (inside or next to the file), with none of the same *guarantees*: no signature, no content-hash binding, no tamper detection, no revocation. Think of an `ai-provenance` record as a structural cousin of one C2PA assertion, not a substitute for a C2PA manifest. If a project genuinely needs verifiable, hard-to-forge authenticity claims — for publication, moderation, or legal purposes — reach for a real C2PA SDK. Use this toolkit for the far more common internal case: "I want to know what I ran to produce this file, six weeks from now, without a database lookup."
 
+### Promoting a record to a Content Credential: `aprov c2pa-manifest`
+
+The two are not either/or. When a file that already carries an aprov record does need a signed credential, the record holds everything the credential should say. `aprov c2pa-manifest` writes it as a C2PA **manifest definition**, the JSON that [`c2patool`](https://github.com/contentauth/c2patool) reads with `-m` and that `c2pa.Builder` in [`c2pa-python`](https://github.com/contentauth/c2pa-python) accepts. You then sign with your own certificate:
+
+```bash
+aprov c2pa-manifest cover.png -o manifest.json
+c2patool cover.png -m manifest.json -o cover.signed.png     # adds the signed C2PA manifest
+```
+
+```console
+$ aprov c2pa-manifest cover.png
+{
+  "claim_generator_info": [
+    {
+      "name": "aprov (asset-provenance-toolkit)",
+      "version": "0.1.0"
+    }
+  ],
+  "title": "cover.png",
+  "assertions": [
+    {
+      "label": "c2pa.actions.v2",
+      "data": {
+        "actions": [
+          {
+            "action": "c2pa.created",
+            "softwareAgent": "flux-2",
+            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia",
+            "when": "2026-10-15T10:17:34.679584+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "label": "io.github.furkiozknn.aprov.recipe",
+      "data": {
+        "capability": "image-generate",
+        "provider": "flux-2",
+        "params": {
+          "prompt": "a red sneaker",
+          "seed": 42
+        },
+        ...
+      }
+    }
+  ]
+}
+```
+
+<sub>Real output, shortened at `...`. The file had been annotated with `aprov embed cover.png --capability image-generate --provider flux-2 --params '{"prompt": "a red sneaker", "seed": 42}' --job-id job-abc123`.</sub>
+
+- **`c2pa.actions.v2`** holds one `c2pa.created` action. Its `digitalSourceType` is the IPTC term for AI-generated media; this is what Content Credentials viewers show as "made with AI". `--digital-source-type composite` gives `compositeWithTrainedAlgorithmicMedia` (AI edits to existing media), `algorithmic` gives `algorithmicMedia`, and a full IPTC URI is accepted. `softwareAgent` is the record's provider and `when` its `created_at`.
+- **`io.github.furkiozknn.aprov.recipe`** is a custom assertion holding the whole record (capability, provider, params, job id, result), so the recipe is covered by the signature too.
+- **Signing keys.** `--alg`, `--sign-cert`, `--private-key` and `--ta-url` are written to the top level, where c2patool looks for them. Without them, pass the signer the way your C2PA tool expects. aprov never reads, stores or needs a key.
+- **Checked against the real SDK.** `tests/test_c2pa_export.py` signs the exported definition with c2pa-python and a throwaway test CA, reads the credential back, and finds both assertions and the IPTC type. The only validation finding is `signingCredential.untrusted` (the test CA is on no trust list). The aprov record is still readable after signing. That test runs only where `c2pa-python` and `cryptography` are installed; neither is a dependency of this project.
+
 ## CLI usage
 
 ```bash
@@ -136,6 +193,9 @@ aprov strip output.png
 
 # Fetch a finished job from a running ai-job-gateway server and embed it in one step
 aprov from-job output.png --gateway-url http://localhost:8000 --job-id <job-id>
+
+# Turn the record into a C2PA manifest definition, then sign it with c2patool
+aprov c2pa-manifest output.png -o manifest.json
 ```
 
 ## Library usage
@@ -184,7 +244,7 @@ uv sync --group dev
 uv run pytest -v
 ```
 
-196 tests (187 run on Windows; the 9 that need POSIX permission bits and symlinks skip there), no network and no external binaries — the MP4 fixtures are ISO base media files the suite builds itself, which is what lets the chunk-offset assertions name an exact byte.
+207 tests (198 run on Windows; the 9 that need POSIX permission bits and symlinks skip there, and the C2PA signing round trip skips wherever `c2pa-python` is not installed), no network and no external binaries — the MP4 fixtures are ISO base media files the suite builds itself, which is what lets the chunk-offset assertions name an exact byte.
 
 There is one check that deliberately does need a binary, and it is the one worth running before trusting the video path:
 

@@ -5,6 +5,9 @@ The version is the one in `pyproject.toml`; a release is the git tag `v<version>
 
 ## [Unreleased]
 
+### Added
+- `aprov c2pa-manifest FILE [-o manifest.json]` turns a file's record into a C2PA manifest definition for `c2patool -m` or c2pa-python's `Builder`. It contains a `c2pa.actions.v2` `c2pa.created` action with the IPTC `trainedAlgorithmicMedia` digital source type (`--digital-source-type composite|algorithmic|<URI>`) and the full record as the custom assertion `io.github.furkiozknn.aprov.recipe`. `--alg/--sign-cert/--private-key/--ta-url` are passed through for c2patool. aprov signs nothing and adds no dependency. Library: `asset_provenance_toolkit.c2pa_export.manifest_definition()`.
+
 ### Fixed
 - `embed`/`extract`/`verify`/`strip` on a directory now fail with `error: ... is a directory, not a file`. Before, `embed` wrote a `<dir>.provenance.json` next to it and `verify` then reported OK.
 - A failed write to a read-only file (Windows) no longer leaves a `.name.xxxx.aprov-tmp` file behind and no longer prints the raw `[WinError 5] ... -> ...`; it says `permission denied - is it read-only ...`.
