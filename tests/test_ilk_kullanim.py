@@ -147,7 +147,7 @@ def test_failed_replace_of_a_read_only_file_leaves_no_temp_file(monkeypatch, tmp
 def test_permission_denied_is_reported_in_words(monkeypatch, capsys, sample_png: Path):
     import asset_provenance_toolkit.cli as cli_module
 
-    def deny(path, provenance):
+    def deny(path, provenance, **_kwargs):
         raise PermissionError(13, "Access is denied", "C:/tmp/.x.aprov-tmp")
 
     monkeypatch.setattr(cli_module, "embed", deny)

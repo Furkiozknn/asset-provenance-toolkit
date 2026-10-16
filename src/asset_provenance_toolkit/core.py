@@ -4,6 +4,9 @@ the CLI and library callers use."""
 
 from __future__ import annotations
 
+import dataclasses
+import hashlib
+import hmac
 from pathlib import Path
 from typing import Callable, NamedTuple, Optional
 
@@ -23,6 +26,10 @@ class _NativeBackend(NamedTuple):
     #: (unreadable file, oversized payload, ...) that the CLI should report
     #: as `error: ...` rather than let escape as a raw traceback.
     clean_errors: tuple[type[Exception], ...]
+    #: SHA-256 hex of the file as `strip` would leave it (see
+    #: `content_digest`). None means "hash the whole file", which is only
+    #: right for a backend that never writes into the file itself.
+    digest: Optional[Callable[[str | Path], str]] = None
 
 
 #: Extensions with a native embedding backend. Extend this (and add a new
@@ -38,6 +45,7 @@ _JPEG_BACKEND = _NativeBackend(
     jpeg_backend.extract_jpeg,
     jpeg_backend.strip_jpeg,
     (UnreadableJpegError, JpegPayloadTooLargeError),
+    jpeg_backend.content_digest_jpeg,
 )
 _MP4_BACKEND = _NativeBackend(
     "mp4",
@@ -45,10 +53,16 @@ _MP4_BACKEND = _NativeBackend(
     mp4_backend.extract_mp4,
     mp4_backend.strip_mp4,
     (UnreadableMp4Error, UnsafeMp4EditError),
+    mp4_backend.content_digest_mp4,
 )
 _NATIVE_BACKENDS: dict[str, _NativeBackend] = {
     ".png": _NativeBackend(
-        "png", png_backend.embed_png, png_backend.extract_png, png_backend.strip_png, (UnreadablePngError,)
+        "png",
+        png_backend.embed_png,
+        png_backend.extract_png,
+        png_backend.strip_png,
+        (UnreadablePngError,),
+        png_backend.content_digest_png,
     ),
     ".jpg": _JPEG_BACKEND,
     ".jpeg": _JPEG_BACKEND,
@@ -91,11 +105,69 @@ def _run(fn, backend: _NativeBackend, *args):
         raise ProvenanceError(str(exc)) from exc
 
 
-def embed(path: str | Path, provenance: Provenance) -> str:
+#: Prefix of every `content_hash` this version writes and can check.
+CONTENT_HASH_PREFIX = "sha256:"
+
+
+def content_digest(path: str | Path) -> str:
+    """``"sha256:<hex>"`` of the file's content with this tool's record left
+    out: the bytes `strip` would leave behind, hashed without writing them.
+
+    Embedding only adds the record, so the digest of a file is the same
+    before and after `embed`, and changes when anything else in the file
+    does: a re-encode, an edit, a different file swapped in under the same
+    name. For a file whose record lives in a sidecar, it is the whole file.
+    """
+    _require_file(path)
+    backend = _native_backend_for(path)
+    if backend is not None and backend.digest is not None:
+        return CONTENT_HASH_PREFIX + _run(backend.digest, backend, path)
+    sha = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            sha.update(chunk)
+    return CONTENT_HASH_PREFIX + sha.hexdigest()
+
+
+class ContentCheck(NamedTuple):
+    """Outcome of `check_content`.
+
+    ``status`` is ``"match"``, ``"mismatch"``, ``"unbound"`` (the record has
+    no content_hash, e.g. it was written by an older version) or
+    ``"unsupported"`` (a hash algorithm this version does not know).
+    """
+
+    status: str
+    expected: Optional[str]
+    actual: Optional[str]
+
+
+def check_content(path: str | Path, provenance: Provenance) -> ContentCheck:
+    """Compare the file's current `content_digest` with the one recorded in
+    `provenance`. Detects change, not intent: the record is unsigned, so
+    anyone can re-embed a fresh hash after editing the file."""
+    expected = provenance.content_hash
+    if expected is None:
+        return ContentCheck("unbound", None, None)
+    if not expected.startswith(CONTENT_HASH_PREFIX):
+        return ContentCheck("unsupported", expected, None)
+    actual = content_digest(path)
+    status = "match" if hmac.compare_digest(actual, expected.lower()) else "mismatch"
+    return ContentCheck(status, expected, actual)
+
+
+def embed(path: str | Path, provenance: Provenance, *, bind_content: bool = False) -> str:
     """Embed `provenance` into the asset at `path`. Returns which backend
     was used ("png", "jpeg", "mp4", or "sidecar"), since callers/CLI output
-    often want to say so explicitly rather than leave it implicit."""
+    often want to say so explicitly rather than leave it implicit.
+
+    ``bind_content=True`` first records the file's `content_digest` as the
+    record's ``content_hash`` (the caller's object is not modified), so a
+    later `check_content` can tell whether the file changed. The CLI does
+    this by default; it costs one extra read of the file."""
     _require_file(path)
+    if bind_content:
+        provenance = dataclasses.replace(provenance, content_hash=content_digest(path))
     backend = _native_backend_for(path)
     if backend is not None:
         _run(backend.embed, backend, path, provenance)

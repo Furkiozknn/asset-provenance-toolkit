@@ -26,6 +26,15 @@ Install time, measured on a clean machine state (empty uv cache, Windows 11, uv 
 | The asset leaves your system as a single file: an image, a clip, a game's sound effect. | The asset is WebM/Matroska: no native backend yet, it falls back to the sidecar. |
 | A pipeline's output step should stamp its files (`aprov verify` exits 0 or 1, `--json` for scripts). | You need to process a folder in one call: one file per invocation, loop in your shell. |
 
+### Why not C2PA or ExifTool?
+
+[C2PA](https://c2pa.org/) (Content Credentials, with tools such as [`c2patool`](https://github.com/contentauth/c2patool) and [`c2pa-python`](https://github.com/contentauth/c2pa-python)) gives you *signed*, tamper-evident manifests bound to the content hash. [ExifTool](https://exiftool.org/) reads and writes the standard EXIF, XMP and IPTC metadata that other software displays.
+
+- **Use C2PA** when someone else must be able to trust where a file came from.
+- **Use ExifTool** when you need standard tags that other software shows. This toolkit's JPEG record is a private marker that `exiftool` does not surface (see [What this tool does NOT do](#what-this-tool-does-not-do)).
+
+What aprov does differently: it embeds the full, unsigned generation recipe (capability, provider, params, job id) as one JSON record, with no keys and no certificates. It does this without re-encoding PNG, JPEG or MP4, and reads the record back with one command. More in [Relationship to C2PA](#relationship-to-c2pa--content-credentials).
+
 Part of the same small ecosystem as [`ai-job-gateway`](https://github.com/Furkiozknn/ai-job-gateway), [`prompt-template-manager`](https://github.com/Furkiozknn/prompt-template-manager), and [`model-comparison-harness`](https://github.com/Furkiozknn/model-comparison-harness) — coupled only through documented HTTP contracts, never through a shared Python dependency.
 
 ## Why
@@ -36,7 +45,7 @@ A generated image or video is only as reproducible as the metadata that survives
 
 - **Embed** a `Provenance` record (capability, provider, params, optional job id / source URL / result / arbitrary `extra` fields) into a file — natively for PNG, JPEG and the MP4/QuickTime family, via a sidecar for anything else.
 - **Extract** it back out, as JSON.
-- **Verify** whether a file has provenance, with a scriptable exit code (or `--json` for machine-readable output).
+- **Verify** whether a file has provenance **and whether the file changed since the record was written** (a SHA-256 of the content, recorded at embed time), with a scriptable exit code (or `--json` for machine-readable output). See [Content hash](#content-hash-did-the-file-change).
 - **Strip** it, when you want to publish a file without its generation history attached.
 - **`from-job`**: fetch a finished job directly from a running `ai-job-gateway`-compatible server and embed its record in one step.
 - **`c2pa-manifest`**: turn the record into a C2PA manifest definition, so `c2patool` or c2pa-python can sign it as a Content Credential ([details](#promoting-a-record-to-a-content-credential-aprov-c2pa-manifest)).
@@ -184,9 +193,10 @@ aprov extract output.png
 #   ...
 # }
 
-# Check whether a file has provenance (exit 0/1, scriptable)
+# Check that a file has provenance and has not changed since (exit 0/1, scriptable)
 aprov verify output.png
-aprov verify output.png --json   # {"ok": true, "file": "output.png", "provenance": {...}}
+aprov verify output.png --json   # {"ok": true, "file": "output.png", "content": {"status": "match", ...}, "provenance": {...}}
+aprov verify output.png --require-content-hash   # also fail a record that has no hash to check
 
 # Remove it before publishing/sharing
 aprov strip output.png
@@ -197,6 +207,30 @@ aprov from-job output.png --gateway-url http://localhost:8000 --job-id <job-id>
 # Turn the record into a C2PA manifest definition, then sign it with c2patool
 aprov c2pa-manifest output.png -o manifest.json
 ```
+
+## Content hash: did the file change?
+
+A record that says "flux-2, seed 42" is only useful while it still describes the file it sits in. Re-encode the image, crop it, or copy a different render over it with the same name, and the record keeps saying the same thing. So `aprov embed` (and `from-job`) now also records `content_hash`, a SHA-256 of the file's content **with the record itself left out**, and `aprov verify` recomputes it:
+
+```text
+$ aprov embed cover.jpg --capability image-generate --provider flux-2 --params '{"prompt": "a red sneaker"}'
+embedded provenance into cover.jpg (jpeg backend)
+$ aprov verify cover.jpg
+OK: cover.jpg has provenance (capability='image-generate', provider='flux-2', source='manual', created_at=2026-10-15T10:09:48.935696+00:00); content unchanged since the record was written (sha256 matches)
+$ aprov verify cover.jpg   # after one byte of scan data changed
+FAIL: cover.jpg has provenance, but content CHANGED since the record was written (recorded sha256:b55434bb29034ab383d082537e673fd776f94749b750a642df99c0431d6727d7, now sha256:cac6fa9dddd8808eb96452034bcca83948c401b23c545f9d2ba4ecf067050e92)
+```
+
+<sub>Real output. The last command exits 1.</sub>
+
+**What is hashed.** Exactly the bytes `aprov strip` would leave: for PNG, every chunk except the `ai-provenance` one; for JPEG, every byte except the `AIPROV1` segment; for MP4/MOV, every box except this tool's `uuid` box, streamed in 1 MiB pieces like the rewrite itself. For a file whose record is a sidecar, the whole file. Embedding only adds the record, so the hash is the same before embedding, after embedding, after embedding again and after stripping; the suite checks all four for every backend. This is the same idea as a C2PA hard binding (a content hash with the manifest's own bytes excluded), without the signature.
+
+**What it is not.** The record is still unsigned. `verify` detects *change*: an editor that re-saved the file, a re-encode, a corrupted copy, a different file swapped in next to a sidecar. It does not detect *forgery*, because anyone who edits the file can embed a fresh hash too. For that, sign with C2PA.
+
+- `--no-content-hash` on `embed`/`from-job` skips it (it costs one extra read of the file).
+- Records written before this field existed still read and still verify; `verify` says "no content hash recorded" and exits 0, or exits 1 with `--require-content-hash`.
+- The field is additive within `schema_version: 1`. A reader that predates it ignores the key.
+- Library: `embed(path, record, bind_content=True)`, `content_digest(path)` and `check_content(path, record)`, which returns `match`, `mismatch`, `unbound` or `unsupported`. The library's `embed` does not hash unless asked, so existing callers see no change.
 
 ## Library usage
 
@@ -231,9 +265,12 @@ A small, deliberately stable JSON shape (`schema_version: 1`) — this is data m
   "source_url": "http://localhost:8000",
   "created_at": "2026-08-31T12:00:00+00:00",
   "result": {"...": "..."},
-  "extra": {}
+  "extra": {},
+  "content_hash": "sha256:b55434bb29034ab383d082537e673fd776f94749b750a642df99c0431d6727d7"
 }
 ```
+
+`content_hash` is optional (see [Content hash](#content-hash-did-the-file-change)); a record without it is just as valid.
 
 Add new fields through `extra`, not by changing what an old file already has embedded — a v1 reader must always be able to parse a v1 record; a record from a newer schema version is rejected with a clear error rather than silently misread.
 
@@ -244,7 +281,7 @@ uv sync --group dev
 uv run pytest -v
 ```
 
-207 tests (198 run on Windows; the 9 that need POSIX permission bits and symlinks skip there, and the C2PA signing round trip skips wherever `c2pa-python` is not installed), no network and no external binaries — the MP4 fixtures are ISO base media files the suite builds itself, which is what lets the chunk-offset assertions name an exact byte.
+227 tests (217 run on Windows; the 9 that need POSIX permission bits and symlinks skip there, and the C2PA signing round trip skips wherever `c2pa-python` is not installed), no network and no external binaries — the MP4 fixtures are ISO base media files the suite builds itself, which is what lets the chunk-offset assertions name an exact byte.
 
 There is one check that deliberately does need a binary, and it is the one worth running before trusting the video path:
 
@@ -256,7 +293,7 @@ It encodes real clips with `ffmpeg` (both box layouts, a `.mov`, an audio-only `
 
 ## What this tool does NOT do
 
-- **It is not a cryptographic authenticity claim.** Unlike C2PA/Content Credentials, nothing this tool writes is signed, hashed against the pixel data, or otherwise tamper-evident. Anyone with file access — including the exact commands this CLI ships — can edit, forge, or strip a provenance record as easily as they could edit any other metadata. Treat an `ai-provenance` record as a note to your future self and teammates, not as proof of origin for a third party.
+- **It is not a cryptographic authenticity claim.** Unlike C2PA/Content Credentials, nothing this tool writes is signed. The `content_hash` shows whether the file changed since the record was written, but it is not tamper-*evident* against someone who means it: they can re-embed a matching hash. Anyone with file access — including the exact commands this CLI ships — can edit, forge, or strip a provenance record as easily as they could edit any other metadata. Treat an `ai-provenance` record as a note to your future self and teammates, not as proof of origin for a third party.
 - **It does not poll or wait.** `from-job` requires the job to already be in `ready` status on the gateway; it makes one GET request and fails cleanly otherwise.
 - **It does not batch.** Each CLI invocation operates on one file; wrap it in a shell loop for a directory of outputs.
 - **It does not rewrite chunk offsets.** The MP4 backend appends its box after the media data and refuses any edit that would move bytes `stco`/`co64` point at, rather than rewriting the sample tables to compensate. That is the safe half of the problem; the other half is a much larger piece of work with a much worse failure mode.

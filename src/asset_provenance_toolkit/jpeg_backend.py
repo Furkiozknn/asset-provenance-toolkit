@@ -21,6 +21,7 @@ untouched here - only the pre-SOS marker segments are inspected or edited.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Optional
 
@@ -149,6 +150,13 @@ def extract_jpeg(path: str | Path) -> Optional[Provenance]:
         if _is_ours(marker, raw):
             return Provenance.from_json(raw[4 + len(_IDENTIFIER) :])
     return None
+
+
+def content_digest_jpeg(path: str | Path) -> str:
+    """SHA-256 hex of the file exactly as ``strip_jpeg`` would leave it, so
+    it is the same before and after ``embed_jpeg`` adds its segment."""
+    data = Path(path).read_bytes()
+    return hashlib.sha256(_rebuild(data, path, new_segment=None)).hexdigest()
 
 
 def strip_jpeg(path: str | Path) -> bool:
