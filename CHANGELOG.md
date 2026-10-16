@@ -7,6 +7,7 @@ The version is the one in `pyproject.toml`; a release is the git tag `v<version>
 
 ### Added
 - Content hash. `aprov embed` and `from-job` record `content_hash`, a SHA-256 of the file's content with the record itself left out (the bytes `strip` would leave). `aprov verify` recomputes it and exits 1 with `content CHANGED` when the file was edited, re-encoded or swapped after the record was written. `--no-content-hash` skips it; `verify --require-content-hash` also fails a record without one; `verify --json` gains a `content` object. The field is optional and additive within `schema_version: 1`. Library: `content_digest()`, `check_content()`, `embed(..., bind_content=True)`; the library's `embed` does not hash unless asked.
+- `aprov c2pa-manifest FILE [-o manifest.json]` turns a file's record into a C2PA manifest definition for `c2patool -m` or c2pa-python's `Builder`. It contains a `c2pa.actions.v2` `c2pa.created` action with the IPTC `trainedAlgorithmicMedia` digital source type (`--digital-source-type composite|algorithmic|<URI>`) and the full record as the custom assertion `io.github.furkiozknn.aprov.recipe`. `--alg/--sign-cert/--private-key/--ta-url` are passed through for c2patool. aprov signs nothing and adds no dependency. Library: `asset_provenance_toolkit.c2pa_export.manifest_definition()`.
 
 ### Fixed
 - `embed`/`extract`/`verify`/`strip` on a directory now fail with `error: ... is a directory, not a file`. Before, `embed` wrote a `<dir>.provenance.json` next to it and `verify` then reported OK.

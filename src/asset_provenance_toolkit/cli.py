@@ -1,10 +1,11 @@
-"""Command-line entry point: `aprov embed|extract|verify|strip|from-job`."""
+"""Command-line entry point: `aprov embed|extract|verify|strip|from-job|c2pa-manifest`."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from . import __version__
 from .core import ContentCheck, check_content, embed, extract, strip
@@ -237,6 +238,50 @@ def _cmd_from_job(args: argparse.Namespace) -> None:
     print(f"embedded provenance from job {args.job_id} into {args.file} ({backend} backend)")
 
 
+def _cmd_c2pa_manifest(args: argparse.Namespace) -> None:
+    from .c2pa_export import manifest_definition
+
+    try:
+        provenance = extract(args.file)
+    except (OSError, ProvenanceError) as exc:
+        print(f"error: {_describe(args.file, exc)}", file=sys.stderr)
+        raise SystemExit(1)
+    if provenance is None:
+        print(
+            f"error: no provenance found for {args.file} - embed a record first "
+            "(aprov embed ... or aprov from-job ...)",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    signing = {
+        "alg": args.alg,
+        "sign_cert": args.sign_cert,
+        "private_key": args.private_key,
+        "ta_url": args.ta_url,
+    }
+    try:
+        definition = manifest_definition(
+            provenance,
+            title=args.title if args.title is not None else Path(args.file).name,
+            digital_source_type=args.digital_source_type,
+            generator_version=__version__,
+            signing=signing,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+    text = json.dumps(definition, indent=2) + "\n"
+    if args.output:
+        try:
+            Path(args.output).write_text(text, encoding="utf-8")
+        except OSError as exc:
+            print(f"error: {_describe(args.output, exc)}", file=sys.stderr)
+            raise SystemExit(1)
+        print(f"wrote C2PA manifest definition for {args.file} to {args.output}", file=sys.stderr)
+        return
+    sys.stdout.write(text)
+
+
 def main() -> None:
     raw = argparse.RawDescriptionHelpFormatter
     parser = _Parser(
@@ -248,7 +293,7 @@ def main() -> None:
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(
-        dest="command", required=True, metavar="{embed,extract,verify,strip,from-job}"
+        dest="command", required=True, metavar="{embed,extract,verify,strip,from-job,c2pa-manifest}"
     )
 
     embed_parser = subparsers.add_parser(
@@ -345,6 +390,34 @@ def main() -> None:
         help="do not record the file's sha256 (verify then cannot tell whether the file changed)",
     )
     from_job_parser.set_defaults(func=_cmd_from_job)
+
+    c2pa_parser = subparsers.add_parser(
+        "c2pa-manifest",
+        help="turn a file's record into a C2PA manifest definition to sign",
+        description="Read FILE's provenance record and print a C2PA manifest definition (JSON)\n"
+        "for c2patool (-m) or c2pa-python's Builder: a c2pa.created action marked as\n"
+        "AI-generated (IPTC digitalSourceType) plus the full record as a custom\n"
+        "assertion. aprov signs nothing; the C2PA tool signs with your certificate.\n",
+        epilog="example:\n"
+        "  aprov c2pa-manifest cover.png -o manifest.json\n"
+        "  c2patool cover.png -m manifest.json -o cover.signed.png\n",
+        formatter_class=raw,
+        hint="a file with a record: aprov c2pa-manifest cover.png -o manifest.json",
+    )
+    c2pa_parser.add_argument("file", help="a file that already has an aprov record")
+    c2pa_parser.add_argument("-o", "--output", default=None, help="write the JSON here instead of stdout")
+    c2pa_parser.add_argument("--title", default=None, help="manifest title (default: the file name)")
+    c2pa_parser.add_argument(
+        "--digital-source-type",
+        default="trained",
+        help="trained (fully AI-generated, default), composite (AI edits to existing media), "
+        "algorithmic, or a full IPTC digitalsourcetype URI",
+    )
+    c2pa_parser.add_argument("--alg", default=None, help="for c2patool: signing algorithm, e.g. es256")
+    c2pa_parser.add_argument("--sign-cert", default=None, help="for c2patool: path to the certificate chain (PEM)")
+    c2pa_parser.add_argument("--private-key", default=None, help="for c2patool: path to the private key (PEM)")
+    c2pa_parser.add_argument("--ta-url", default=None, help="for c2patool: RFC 3161 time-stamp authority URL")
+    c2pa_parser.set_defaults(func=_cmd_c2pa_manifest)
 
     args = parser.parse_args()
     args.func(args)
