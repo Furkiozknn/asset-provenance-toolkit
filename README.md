@@ -26,6 +26,15 @@ Install time, measured on a clean machine state (empty uv cache, Windows 11, uv 
 | The asset leaves your system as a single file: an image, a clip, a game's sound effect. | The asset is WebM/Matroska: no native backend yet, it falls back to the sidecar. |
 | A pipeline's output step should stamp its files (`aprov verify` exits 0 or 1, `--json` for scripts). | You need to process a folder in one call: one file per invocation, loop in your shell. |
 
+### Why not C2PA or ExifTool?
+
+[C2PA](https://c2pa.org/) (Content Credentials, with tools such as [`c2patool`](https://github.com/contentauth/c2patool) and [`c2pa-python`](https://github.com/contentauth/c2pa-python)) gives you *signed*, tamper-evident manifests bound to the content hash. [ExifTool](https://exiftool.org/) reads and writes the standard EXIF, XMP and IPTC metadata that other software displays.
+
+- **Use C2PA** when someone else must be able to trust where a file came from.
+- **Use ExifTool** when you need standard tags that other software shows. This toolkit's JPEG record is a private marker that `exiftool` does not surface (see [What this tool does NOT do](#what-this-tool-does-not-do)).
+
+What aprov does differently: it embeds the full, unsigned generation recipe (capability, provider, params, job id) as one JSON record, with no keys and no certificates. It does this without re-encoding PNG, JPEG or MP4, and reads the record back with one command. More in [Relationship to C2PA](#relationship-to-c2pa--content-credentials).
+
 Part of the same small ecosystem as [`ai-job-gateway`](https://github.com/Furkiozknn/ai-job-gateway), [`prompt-template-manager`](https://github.com/Furkiozknn/prompt-template-manager), and [`model-comparison-harness`](https://github.com/Furkiozknn/model-comparison-harness) — coupled only through documented HTTP contracts, never through a shared Python dependency.
 
 ## Why
