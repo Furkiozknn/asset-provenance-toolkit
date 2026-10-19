@@ -13,7 +13,7 @@ Public surface::
 
 from __future__ import annotations
 
-from .core import embed, extract, strip
+from .core import ContentCheck, check_content, content_digest, embed, extract, strip
 from .gateway_client import JobFetchError, fetch_job_record
 from .schema import Provenance, ProvenanceError
 
@@ -23,6 +23,9 @@ __all__ = [
     "embed",
     "extract",
     "strip",
+    "content_digest",
+    "check_content",
+    "ContentCheck",
     "fetch_job_record",
     "JobFetchError",
 ]

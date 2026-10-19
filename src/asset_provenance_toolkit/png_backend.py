@@ -17,6 +17,7 @@ already does with its APP1 segment.
 
 from __future__ import annotations
 
+import hashlib
 import struct
 import zlib
 from pathlib import Path
@@ -194,6 +195,14 @@ def extract_png(path: str | Path) -> Optional[Provenance]:
         if keyword == PROVENANCE_KEY:
             return Provenance.from_json(text)
     return None
+
+
+def content_digest_png(path: str | Path) -> str:
+    """SHA-256 hex of the file exactly as ``strip_png`` would leave it: every
+    chunk except this tool's own, re-emitted as the writer emits them. It is
+    the same before and after ``embed_png``, which only adds that chunk."""
+    raw, chunks = _read_chunks(path)
+    return hashlib.sha256(_rebuild(raw, chunks, None)).hexdigest()
 
 
 def strip_png(path: str | Path) -> bool:

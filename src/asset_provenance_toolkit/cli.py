@@ -1,13 +1,14 @@
-"""Command-line entry point: `aprov embed|extract|verify|strip|from-job`."""
+"""Command-line entry point: `aprov embed|extract|verify|strip|from-job|c2pa-manifest`."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from . import __version__
-from .core import embed, extract, strip
+from .core import ContentCheck, check_content, embed, extract, strip
 from .gateway_client import JobFetchError, fetch_job_record
 from .schema import Provenance, ProvenanceError
 from .sidecar_backend import sidecar_path
@@ -91,12 +92,26 @@ def _cmd_embed(args: argparse.Namespace) -> None:
         extra=extra,
     )
     try:
-        backend = embed(args.file, provenance)
+        backend = embed(args.file, provenance, bind_content=not args.no_content_hash)
     except (OSError, ProvenanceError) as exc:
         print(f"error: {_describe(args.file, exc)}", file=sys.stderr)
         raise SystemExit(1)
     where = f"{backend} backend: {sidecar_path(args.file)}" if backend == "sidecar" else f"{backend} backend"
     print(f"embedded provenance into {args.file} ({where})")
+
+
+
+def _content_line(check: ContentCheck) -> str:
+    if check.status == "match":
+        return "content unchanged since the record was written (sha256 matches)"
+    if check.status == "mismatch":
+        return (
+            "content CHANGED since the record was written "
+            f"(recorded {check.expected}, now {check.actual})"
+        )
+    if check.status == "unsupported":
+        return f"content hash {check.expected!r} uses an algorithm this version cannot check"
+    return "no content hash recorded (embed again to add one)"
 
 
 def _cmd_extract(args: argparse.Namespace) -> None:
@@ -126,13 +141,43 @@ def _cmd_verify(args: argparse.Namespace) -> None:
         else:
             print(f"FAIL: no provenance found for {args.file}")
         raise SystemExit(1)
+    try:
+        check = check_content(args.file, provenance)
+    except (OSError, ProvenanceError) as exc:
+        if args.json:
+            print(json.dumps({"ok": False, "file": args.file, "error": _describe(args.file, exc)}))
+        else:
+            print(f"FAIL: {_describe(args.file, exc)}")
+        raise SystemExit(1)
+    ok = check.status == "match" or (
+        check.status in ("unbound", "unsupported") and not args.require_content_hash
+    )
     if args.json:
-        print(json.dumps({"ok": True, "file": args.file, "provenance": provenance.to_dict()}))
+        print(
+            json.dumps(
+                {
+                    "ok": ok,
+                    "file": args.file,
+                    "content": {
+                        "status": check.status,
+                        "expected": check.expected,
+                        "actual": check.actual,
+                    },
+                    "provenance": provenance.to_dict(),
+                }
+            )
+        )
+        if not ok:
+            raise SystemExit(1)
         return
+    if not ok:
+        print(f"FAIL: {args.file} has provenance, but {_content_line(check)}")
+        raise SystemExit(1)
     print(
         f"OK: {args.file} has provenance "
         f"(capability={provenance.capability!r}, provider={provenance.provider!r}, "
-        f"source={provenance.source!r}, created_at={provenance.created_at})"
+        f"source={provenance.source!r}, created_at={provenance.created_at}); "
+        f"{_content_line(check)}"
     )
 
 
@@ -186,11 +231,55 @@ def _cmd_from_job(args: argparse.Namespace) -> None:
         print(f"error: job record from {args.gateway_url} has an unexpected shape: {exc}", file=sys.stderr)
         raise SystemExit(1)
     try:
-        backend = embed(args.file, provenance)
+        backend = embed(args.file, provenance, bind_content=not args.no_content_hash)
     except (OSError, ProvenanceError) as exc:
         print(f"error: {_describe(args.file, exc)}", file=sys.stderr)
         raise SystemExit(1)
     print(f"embedded provenance from job {args.job_id} into {args.file} ({backend} backend)")
+
+
+def _cmd_c2pa_manifest(args: argparse.Namespace) -> None:
+    from .c2pa_export import manifest_definition
+
+    try:
+        provenance = extract(args.file)
+    except (OSError, ProvenanceError) as exc:
+        print(f"error: {_describe(args.file, exc)}", file=sys.stderr)
+        raise SystemExit(1)
+    if provenance is None:
+        print(
+            f"error: no provenance found for {args.file} - embed a record first "
+            "(aprov embed ... or aprov from-job ...)",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    signing = {
+        "alg": args.alg,
+        "sign_cert": args.sign_cert,
+        "private_key": args.private_key,
+        "ta_url": args.ta_url,
+    }
+    try:
+        definition = manifest_definition(
+            provenance,
+            title=args.title if args.title is not None else Path(args.file).name,
+            digital_source_type=args.digital_source_type,
+            generator_version=__version__,
+            signing=signing,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+    text = json.dumps(definition, indent=2) + "\n"
+    if args.output:
+        try:
+            Path(args.output).write_text(text, encoding="utf-8")
+        except OSError as exc:
+            print(f"error: {_describe(args.output, exc)}", file=sys.stderr)
+            raise SystemExit(1)
+        print(f"wrote C2PA manifest definition for {args.file} to {args.output}", file=sys.stderr)
+        return
+    sys.stdout.write(text)
 
 
 def main() -> None:
@@ -204,7 +293,7 @@ def main() -> None:
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(
-        dest="command", required=True, metavar="{embed,extract,verify,strip,from-job}"
+        dest="command", required=True, metavar="{embed,extract,verify,strip,from-job,c2pa-manifest}"
     )
 
     embed_parser = subparsers.add_parser(
@@ -232,6 +321,11 @@ def main() -> None:
     embed_parser.add_argument(
         "--extra", default="{}", help="JSON object of additional fields, e.g. '{\"seed\": 42}'"
     )
+    embed_parser.add_argument(
+        "--no-content-hash",
+        action="store_true",
+        help="do not record the file's sha256 (verify then cannot tell whether the file changed)",
+    )
     embed_parser.set_defaults(func=_cmd_embed)
 
     extract_parser = subparsers.add_parser(
@@ -248,16 +342,22 @@ def main() -> None:
 
     verify_parser = subparsers.add_parser(
         "verify",
-        help="check whether a file has a record (exit 0 or 1)",
-        description="Exit 0 if FILE has a readable provenance record, 1 if not.\n"
-        "Checks presence and shape only - the record is not signed,\n"
-        "so this is not proof of origin.\n",
-        epilog="example:\n  aprov verify cat.png --json\n",
+        help="check a file's record and whether the file changed since (exit 0 or 1)",
+        description="Exit 0 if FILE has a readable provenance record and, when the record\n"
+        "carries a content hash, the file still matches it. Exit 1 if there is no\n"
+        "record or the content changed. The record is not signed, so this detects\n"
+        "change, not forgery: it is not proof of origin.\n",
+        epilog="example:\n  aprov verify cat.png --json\n  aprov verify cat.png --require-content-hash\n",
         formatter_class=raw,
         hint="a file: aprov verify cat.png",
     )
     verify_parser.add_argument("file", help="the file to check")
     verify_parser.add_argument("--json", action="store_true", help="machine-readable JSON instead of text")
+    verify_parser.add_argument(
+        "--require-content-hash",
+        action="store_true",
+        help="also fail (exit 1) when the record has no content hash to check",
+    )
     verify_parser.set_defaults(func=_cmd_verify)
 
     strip_parser = subparsers.add_parser(
@@ -284,7 +384,40 @@ def main() -> None:
     from_job_parser.add_argument("file", help="the file the job produced")
     from_job_parser.add_argument("--gateway-url", required=True, help="base URL, including http:// or https://")
     from_job_parser.add_argument("--job-id", required=True, help="id of a job whose status is ready")
+    from_job_parser.add_argument(
+        "--no-content-hash",
+        action="store_true",
+        help="do not record the file's sha256 (verify then cannot tell whether the file changed)",
+    )
     from_job_parser.set_defaults(func=_cmd_from_job)
+
+    c2pa_parser = subparsers.add_parser(
+        "c2pa-manifest",
+        help="turn a file's record into a C2PA manifest definition to sign",
+        description="Read FILE's provenance record and print a C2PA manifest definition (JSON)\n"
+        "for c2patool (-m) or c2pa-python's Builder: a c2pa.created action marked as\n"
+        "AI-generated (IPTC digitalSourceType) plus the full record as a custom\n"
+        "assertion. aprov signs nothing; the C2PA tool signs with your certificate.\n",
+        epilog="example:\n"
+        "  aprov c2pa-manifest cover.png -o manifest.json\n"
+        "  c2patool cover.png -m manifest.json -o cover.signed.png\n",
+        formatter_class=raw,
+        hint="a file with a record: aprov c2pa-manifest cover.png -o manifest.json",
+    )
+    c2pa_parser.add_argument("file", help="a file that already has an aprov record")
+    c2pa_parser.add_argument("-o", "--output", default=None, help="write the JSON here instead of stdout")
+    c2pa_parser.add_argument("--title", default=None, help="manifest title (default: the file name)")
+    c2pa_parser.add_argument(
+        "--digital-source-type",
+        default="trained",
+        help="trained (fully AI-generated, default), composite (AI edits to existing media), "
+        "algorithmic, or a full IPTC digitalsourcetype URI",
+    )
+    c2pa_parser.add_argument("--alg", default=None, help="for c2patool: signing algorithm, e.g. es256")
+    c2pa_parser.add_argument("--sign-cert", default=None, help="for c2patool: path to the certificate chain (PEM)")
+    c2pa_parser.add_argument("--private-key", default=None, help="for c2patool: path to the private key (PEM)")
+    c2pa_parser.add_argument("--ta-url", default=None, help="for c2patool: RFC 3161 time-stamp authority URL")
+    c2pa_parser.set_defaults(func=_cmd_c2pa_manifest)
 
     args = parser.parse_args()
     args.func(args)
